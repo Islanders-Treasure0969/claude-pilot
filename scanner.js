@@ -73,6 +73,78 @@ export function scanProjectSkills(projectDir) {
   return discovered;
 }
 
+/**
+ * Scan installed plugins and return their skills.
+ * Reads from ~/.claude/plugins/installed_plugins.json and settings.json.
+ */
+export function scanInstalledPlugins(projectDir) {
+  const home = process.env.HOME || "";
+  const installedPath = path.join(home, ".claude", "plugins", "installed_plugins.json");
+  const settingsPath = path.join(projectDir, ".claude", "settings.json");
+
+  const plugins = [];
+
+  // Read installed_plugins.json
+  const installedContent = readFileSafe(installedPath);
+  if (!installedContent) return plugins;
+
+  let installed;
+  try { installed = JSON.parse(installedContent); } catch { return plugins; }
+
+  // Read project settings to check enabled state
+  let enabledPlugins = {};
+  const settingsContent = readFileSafe(settingsPath);
+  if (settingsContent) {
+    try { enabledPlugins = JSON.parse(settingsContent).enabledPlugins || {}; } catch {}
+  }
+
+  for (const [key, entries] of Object.entries(installed.plugins || {})) {
+    const pluginName = key.split("@")[0];
+    const marketplace = key.split("@")[1] || "unknown";
+
+    // Find entry relevant to this project (or any user-scoped entry)
+    const entry = entries.find(e =>
+      e.projectPath === projectDir || e.scope === "user"
+    ) || entries[0];
+
+    if (!entry) continue;
+
+    const installDir = entry.installPath;
+    const pluginJsonPath = path.join(installDir, ".claude-plugin", "plugin.json");
+    const pluginJsonContent = readFileSafe(pluginJsonPath);
+
+    let meta = { name: pluginName, description: "", version: entry.version || "unknown" };
+    if (pluginJsonContent) {
+      try { meta = { ...meta, ...JSON.parse(pluginJsonContent) }; } catch {}
+    }
+
+    // Scan skills inside the plugin
+    const skillsDir = path.join(installDir, "skills");
+    const skillNames = [];
+    try {
+      for (const d of fs.readdirSync(skillsDir, { withFileTypes: true })) {
+        if (d.isDirectory()) skillNames.push(d.name);
+        else if (d.isFile() && d.name.endsWith(".md")) skillNames.push(d.name.replace(".md", ""));
+      }
+    } catch { /* no skills dir */ }
+
+    const enabled = !!enabledPlugins[key] || !!enabledPlugins[pluginName];
+
+    plugins.push({
+      name: pluginName,
+      marketplace,
+      version: meta.version,
+      description: meta.description,
+      skills: skillNames,
+      enabled,
+      scope: entry.scope || "unknown",
+      installPath: installDir,
+    });
+  }
+
+  return plugins;
+}
+
 export function detectProjectType(projectDir) {
   const indicators = [];
   if (fs.existsSync(path.join(projectDir, "dbt_project.yml")) ||

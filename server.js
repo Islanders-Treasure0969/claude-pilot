@@ -13,7 +13,7 @@ import yaml from "js-yaml";
 import { query } from "@anthropic-ai/claude-agent-sdk";
 import { CmuxBridge } from "./cmux-bridge.js";
 import { evaluateGates, evaluateSubsteps, readFileSafe } from "./gate-engine.js";
-import { scanProjectSkills, scaffoldWorkflow } from "./scanner.js";
+import { scanProjectSkills, scanInstalledPlugins, scaffoldWorkflow } from "./scanner.js";
 import { execFile } from "child_process";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -433,6 +433,137 @@ app.post("/api/scaffold", (_r, res) => {
   }
 });
 
+// ── Plugin/Skills ↔ workflow.yml Sync ────────────
+
+function syncWorkflowSkills() {
+  if (!workflow || !fs.existsSync(WORKFLOW_FILE)) return { added: [], removed: [], unchanged: 0 };
+
+  // 1. Gather all skills from plugins + .claude/ directory
+  const plugins = scanInstalledPlugins(PROJECT_DIR);
+  const projectSkills = scanProjectSkills(PROJECT_DIR);
+
+  const liveSkills = new Map(); // name → { name, desc, type, source }
+
+  for (const plugin of plugins) {
+    // Each plugin's skills become invocable as "/<plugin>:<skill>" or "/<skill>"
+    for (const sk of plugin.skills) {
+      const name = `/${plugin.name}:${sk}`;
+      liveSkills.set(name, {
+        name,
+        desc: `${sk} (${plugin.name} v${plugin.version})`,
+        type: "prompt",
+        source: "plugin",
+      });
+    }
+  }
+
+  for (const cmd of projectSkills.commands) {
+    const name = `/${cmd.name}`;
+    liveSkills.set(name, { name, desc: cmd.description || cmd.name, type: "prompt", source: "command" });
+  }
+
+  for (const skill of projectSkills.skills) {
+    if (!skill.userInvocable && !skill.description) continue;
+    const name = skill.name.startsWith("/") ? skill.name : `/${skill.name}`;
+    liveSkills.set(name, { name, desc: skill.description || skill.name, type: "prompt", source: "skill" });
+  }
+
+  for (const agent of projectSkills.agents) {
+    const name = `use subagent ${agent.name}`;
+    liveSkills.set(name, { name, desc: agent.description || agent.name, type: "prompt", source: "agent" });
+  }
+
+  // 2. Get current workflow global skills
+  const g = workflow.global || {};
+  const categories = g.categories || [];
+  const syncCatName = "Synced Plugins & Skills";
+
+  // Find or prepare the synced category
+  let syncCat = categories.find(c => c.name === syncCatName);
+  const existingSyncSkills = new Map();
+  if (syncCat) {
+    for (const sk of syncCat.skills || []) existingSyncSkills.set(sk.name, sk);
+  }
+
+  // 3. Compute diff
+  const added = [];
+  const removed = [];
+  let unchanged = 0;
+
+  for (const [name, sk] of liveSkills) {
+    if (existingSyncSkills.has(name)) {
+      unchanged++;
+      existingSyncSkills.delete(name);
+    } else {
+      added.push({ name: sk.name, desc: sk.desc, type: sk.type });
+    }
+  }
+
+  for (const [name] of existingSyncSkills) {
+    removed.push(name);
+  }
+
+  if (added.length === 0 && removed.length === 0) return { added: [], removed: [], unchanged };
+
+  // 4. Update workflow.yml
+  const newSyncSkills = [];
+  // Keep existing ones that are still live
+  if (syncCat) {
+    for (const sk of syncCat.skills || []) {
+      if (!removed.includes(sk.name)) newSyncSkills.push(sk);
+    }
+  }
+  // Add new ones
+  for (const sk of added) newSyncSkills.push(sk);
+
+  if (syncCat) {
+    syncCat.skills = newSyncSkills;
+  } else if (newSyncSkills.length > 0) {
+    if (!workflow.global) workflow.global = {};
+    if (!workflow.global.categories) workflow.global.categories = [];
+    workflow.global.categories.push({ name: syncCatName, skills: newSyncSkills });
+  }
+
+  // 5. Write back
+  try {
+    const rawContent = fs.readFileSync(WORKFLOW_FILE, "utf-8");
+    const parsed = yaml.load(rawContent);
+    if (!parsed.global) parsed.global = {};
+    if (!parsed.global.categories) parsed.global.categories = [];
+
+    let parsedSyncCat = parsed.global.categories.find(c => c.name === syncCatName);
+    if (parsedSyncCat) {
+      parsedSyncCat.skills = newSyncSkills;
+    } else if (newSyncSkills.length > 0) {
+      parsed.global.categories.push({ name: syncCatName, skills: newSyncSkills });
+    }
+
+    const yamlContent = yaml.dump(parsed, { lineWidth: 120, noRefs: true });
+    fs.writeFileSync(WORKFLOW_FILE, yamlContent);
+    loadWorkflow();
+    broadcast({ type: "workflow", workflow: safeWorkflow() });
+  } catch (e) {
+    console.error("  Sync error:", e.message);
+  }
+
+  return {
+    added: added.map(s => s.name),
+    removed,
+    unchanged,
+  };
+}
+
+app.get("/api/sync", (_r, res) => {
+  const result = syncWorkflowSkills();
+  res.json({ ok: true, ...result });
+});
+
+app.post("/api/sync", (_r, res) => {
+  const result = syncWorkflowSkills();
+  addEvent("default", "Sync", `+${result.added.length} -${result.removed.length} =${result.unchanged}`);
+  res.json({ ok: true, ...result });
+});
+
 app.get("/api/sessions", (_r, res) => {
   const list = [...sessions.values()].map(s => ({
     id: s.id, label: s.label, lastActivity: s.lastActivity,
@@ -813,7 +944,28 @@ app.post("/api/plugins/install", async (req, res) => {
       });
     });
     addEvent("default", "Plugin", `Installed: ${name}`);
-    res.json({ ok: true, message: result.trim() });
+    // Auto-sync workflow.yml after install
+    const sync = syncWorkflowSkills();
+    res.json({ ok: true, message: result.trim(), sync });
+  } catch (e) {
+    res.json({ ok: false, error: e.message });
+  }
+});
+
+app.post("/api/plugins/uninstall", async (req, res) => {
+  const { name, scope } = req.body;
+  if (!name) return res.status(400).json({ error: "name required" });
+  try {
+    const result = await new Promise((resolve, reject) => {
+      execFile("claude", ["plugin", "uninstall", name, "--scope", scope || "project"], { timeout: 30000 }, (err, stdout, stderr) => {
+        if (err) reject(new Error(stderr || err.message));
+        else resolve(stdout);
+      });
+    });
+    addEvent("default", "Plugin", `Uninstalled: ${name}`);
+    // Auto-sync workflow.yml after uninstall
+    const sync = syncWorkflowSkills();
+    res.json({ ok: true, message: result.trim(), sync });
   } catch (e) {
     res.json({ ok: false, error: e.message });
   }
