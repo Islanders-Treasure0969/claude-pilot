@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Claude Pilot — Development Cockpit for Claude Code</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0d1117;--s1:#151b23;--s2:#1c2333;--tx:#c9d1d9;--txb:#e6edf3;--bl:#58a6ff;--gn:#3fb950;--or:#d29922;--pu:#bc8cff}
+body{background:var(--bg);color:var(--tx);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;line-height:1.6}
+a{color:var(--bl);text-decoration:none}
+a:hover{text-decoration:underline}
+
+.hero{text-align:center;padding:80px 20px 60px;background:linear-gradient(180deg,var(--s2) 0%,var(--bg) 100%)}
+.hero h1{font-size:48px;color:var(--txb);margin-bottom:12px;font-weight:700}
+.hero h1 span{color:var(--bl)}
+.hero p{font-size:20px;color:var(--tx);max-width:600px;margin:0 auto 32px}
+.hero .badges{display:flex;gap:8px;justify-content:center;margin-bottom:24px}
+.hero .badges img{height:20px}
+.btn{display:inline-block;padding:12px 28px;border-radius:8px;font-size:16px;font-weight:600;cursor:pointer;transition:all .2s}
+.btn-primary{background:var(--bl);color:#fff}
+.btn-primary:hover{background:#79bbff;text-decoration:none}
+.btn-secondary{background:var(--s1);color:var(--txb);border:1px solid #30363d;margin-left:12px}
+.btn-secondary:hover{border-color:var(--bl);text-decoration:none}
+
+.demo{max-width:960px;margin:0 auto;padding:40px 20px}
+.demo video{width:100%;border-radius:12px;border:1px solid #30363d;box-shadow:0 8px 32px rgba(0,0,0,.4)}
+
+.features{max-width:960px;margin:0 auto;padding:60px 20px}
+.features h2{font-size:32px;color:var(--txb);text-align:center;margin-bottom:40px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:24px}
+.card{background:var(--s1);border:1px solid #21262d;border-radius:12px;padding:24px}
+.card h3{color:var(--txb);font-size:16px;margin-bottom:8px}
+.card .icon{font-size:24px;margin-bottom:8px}
+.card p{font-size:14px;color:var(--tx)}
+
+.screenshots{max-width:960px;margin:0 auto;padding:60px 20px}
+.screenshots h2{font-size:32px;color:var(--txb);text-align:center;margin-bottom:40px}
+.ss-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(400px,1fr));gap:20px}
+.ss-item{border-radius:12px;overflow:hidden;border:1px solid #21262d}
+.ss-item img{width:100%;display:block}
+.ss-item .caption{background:var(--s1);padding:10px 16px;font-size:13px;color:var(--tx)}
+
+.install{max-width:700px;margin:0 auto;padding:60px 20px;text-align:center}
+.install h2{font-size:32px;color:var(--txb);margin-bottom:24px}
+.code-block{background:var(--s1);border:1px solid #21262d;border-radius:12px;padding:20px 28px;text-align:left;font-family:'SF Mono',SFMono-Regular,Consolas,monospace;font-size:14px;color:var(--gn);margin:20px 0}
+.code-block .comment{color:#484f58}
+
+.footer{text-align:center;padding:40px 20px;border-top:1px solid #21262d;color:#484f58;font-size:13px}
+
+@media(max-width:600px){
+  .hero h1{font-size:32px}
+  .hero p{font-size:16px}
+  .ss-grid{grid-template-columns:1fr}
+  .btn-secondary{margin-left:0;margin-top:8px}
+}
+</style>
+</head>
+<body>
+
+<section class="hero">
+  <h1>Claude <span>Pilot</span></h1>
+  <p>Development cockpit for Claude Code. Visualize workflows, discover skills, and orchestrate your AI coding sessions.</p>
+  <div class="badges">
+    <img src="https://img.shields.io/npm/v/claude-pilot?style=flat-square&color=58a6ff" alt="npm version">
+    <img src="https://img.shields.io/badge/license-MIT-3fb950?style=flat-square" alt="license">
+    <img src="https://img.shields.io/badge/tests-68%20passing-3fb950?style=flat-square" alt="tests">
+  </div>
+  <a href="https://github.com/Islanders-Treasure0969/claude-pilot" class="btn btn-primary">View on GitHub</a>
+  <a href="#install" class="btn btn-secondary">Quick Start</a>
+</section>
+
+<section class="demo">
+  <video autoplay loop muted playsinline>
+    <source src="assets/demo.webm" type="video/webm">
+  </video>
+</section>
+
+<section class="features">
+  <h2>Features</h2>
+  <div class="grid">
+    <div class="card">
+      <div class="icon">&#x1f4ca;</div>
+      <h3>Workflow Pipeline</h3>
+      <p>Visualize development phases with real-time gate evaluation. Declarative rules in workflow.yml — no code changes needed.</p>
+    </div>
+    <div class="card">
+      <div class="icon">&#x2318;</div>
+      <h3>Ctrl+K Command Palette</h3>
+      <p>Search across all skills, commands, and subagents instantly. Click to send directly to your Claude Code terminal.</p>
+    </div>
+    <div class="card">
+      <div class="icon">&#x1f50c;</div>
+      <h3>Plugin Sync</h3>
+      <p>Installed plugins auto-sync to workflow.yml. Install, uninstall, and the global skills list stays up to date.</p>
+    </div>
+    <div class="card">
+      <div class="icon">&#x1f916;</div>
+      <h3>Autopilot Mode</h3>
+      <p>Automatically walk through substeps. Sends each skill to your terminal, waits for completion, then moves to the next.</p>
+    </div>
+    <div class="card">
+      <div class="icon">&#x1f6e1;</div>
+      <h3>Security Built-in</h3>
+      <p>Input validation, CSP headers, XSS protection. Security-guidance and code-review plugins pre-configured.</p>
+    </div>
+    <div class="card">
+      <div class="icon">&#x1f3ae;</div>
+      <h3>Easter Egg</h3>
+      <p>Try the Konami code for a retro CRT mode. Because developer tools should be fun too.</p>
+    </div>
+  </div>
+</section>
+
+<section class="screenshots">
+  <h2>Screenshots</h2>
+  <div class="ss-grid">
+    <div class="ss-item">
+      <img src="assets/01-dashboard.png" alt="Dashboard" loading="lazy">
+      <div class="caption">Main dashboard with workflow pipeline and event log</div>
+    </div>
+    <div class="ss-item">
+      <img src="assets/03-palette.png" alt="Command Palette" loading="lazy">
+      <div class="caption">Ctrl+K command palette for instant skill search</div>
+    </div>
+    <div class="ss-item">
+      <img src="assets/05-config-overview.png" alt="Config Panel" loading="lazy">
+      <div class="caption">Config panel: hooks, subagents, CLAUDE.md status</div>
+    </div>
+    <div class="ss-item">
+      <img src="assets/06-config-plugins.png" alt="Plugin Store" loading="lazy">
+      <div class="caption">Plugin marketplace with one-click install</div>
+    </div>
+    <div class="ss-item">
+      <img src="assets/08-retro-mode.png" alt="Retro Mode" loading="lazy">
+      <div class="caption">Retro CRT mode (Konami code easter egg)</div>
+    </div>
+    <div class="ss-item">
+      <img src="assets/07-config-analytics.png" alt="Analytics" loading="lazy">
+      <div class="caption">Analytics: CLAUDE.md score, PRD progress, event stats</div>
+    </div>
+  </div>
+</section>
+
+<section class="install" id="install">
+  <h2>Quick Start</h2>
+  <div class="code-block">
+    <span class="comment"># Install globally</span><br>
+    npm install -g claude-pilot<br><br>
+    <span class="comment"># Run in your project directory</span><br>
+    claude-pilot<br><br>
+    <span class="comment"># Open http://localhost:3456</span>
+  </div>
+  <p style="margin-top:16px">Or scaffold a workflow from your existing <code>.claude/</code> directory:</p>
+  <div class="code-block">
+    claude-pilot scaffold --output .claude-pilot/workflow.yml
+  </div>
+</section>
+
+<footer class="footer">
+  <p>MIT License &middot; Built with Claude Code &middot; <a href="https://github.com/Islanders-Treasure0969/claude-pilot">GitHub</a></p>
+</footer>
+
+</body>
+</html>
