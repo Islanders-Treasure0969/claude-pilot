@@ -453,9 +453,9 @@ app.post("/api/cmux-send", async (req, res) => {
   if (!prompt) return res.status(400).json({ error: "prompt required" });
   if (!cmux.available) return res.status(503).json({ error: "cmux not available" });
 
-  console.log(`  [cmux-send] prompt="${prompt}", surface=${cmux.getDefaultClaudeSurface()}, available=${cmux.available}`);
+  // Always refresh surfaces before sending (surfaces can become stale)
+  await cmux.refreshClaudeSurfaces();
   const ok = await cmux.sendToClaudeCode(prompt, surfaceRef);
-  console.log(`  [cmux-send] result=${ok}`);
   if (ok) {
     addEvent("default", "Send", `→ Terminal: ${prompt.length > 100 ? prompt.slice(0, 100) + "..." : prompt}`);
   }

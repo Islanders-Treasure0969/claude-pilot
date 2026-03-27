@@ -31,11 +31,18 @@ export class CmuxBridge {
   }
 
   exec(args) {
-    // Build args with socket path if available
     const fullArgs = this.socketPath ? ["--socket", this.socketPath, ...args] : args;
     return new Promise((resolve, reject) => {
       execFile(CMUX_BIN, fullArgs, { timeout: EXEC_TIMEOUT }, (err, stdout) => {
-        if (err) reject(err);
+        if (err) {
+          // If socket connection lost, try without socket path as fallback
+          if (this.socketPath && /ECONNREFUSED|ENOENT|socket/.test(err.message)) {
+            execFile(CMUX_BIN, args, { timeout: EXEC_TIMEOUT }, (err2, stdout2) => {
+              if (err2) reject(err);
+              else { this.socketPath = null; resolve(stdout2.trim()); }
+            });
+          } else reject(err);
+        }
         else resolve(stdout.trim());
       });
     });
