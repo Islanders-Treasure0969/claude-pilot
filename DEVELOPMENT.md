@@ -125,9 +125,13 @@ claude-md-management, hookify, skill-creator, code-simplifier, pyright-lsp, feat
 - 日本語入力で Enter が送信されないか
 - コナミコマンドでレトロモードが切り替わるか
 
+### v0.5.0 追加修正 (2026-03-27 continued)
+9. ~~**Plugin/Skills ↔ workflow.yml 同期**~~ — scanInstalledPlugins() + syncWorkflowSkills() で双方向同期。install/uninstall 後に自動実行
+10. ~~**Prompt Library Run 未実装**~~ — Prompts タブ追加、loadPromptList() + runPrompt() 実装
+
 ### 次のTODO
 1. **GitHub リポジトリ作成** — リモート設定 + CI
-2. **プラグイン同梱配布** — scaffold 時に global-plugin を自動セットアップする機能（検討中）
+2. **Playwright でのブラウザ自動テスト** — UI 検証の自動化
 3. **npm publish** — パッケージ公開
 
 ---
