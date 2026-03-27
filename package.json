@@ -8,8 +8,19 @@
     "claude-pilot": "./cli.js"
   },
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "node --test test/*.test.js"
   },
+  "files": [
+    "cli.js",
+    "server.js",
+    "gate-engine.js",
+    "scanner.js",
+    "cmux-bridge.js",
+    "public/",
+    "README.md",
+    "LICENSE"
+  ],
   "keywords": ["claude", "claude-code", "developer-tools", "workflow", "cmux"],
   "license": "MIT",
   "dependencies": {

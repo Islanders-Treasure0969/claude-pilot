@@ -1,0 +1,10 @@
+.claude/
+.claude-pilot/
+.local/
+.git/
+.gitignore
+.DS_Store
+test/
+node_modules/
+DEVELOPMENT.md
+package-lock.json

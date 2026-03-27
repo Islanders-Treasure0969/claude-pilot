@@ -106,26 +106,29 @@ claude-md-management, hookify, skill-creator, code-simplifier, pyright-lsp, feat
 
 ## 既知の問題・未完了事項
 
-### バグ・要修正
-1. **server.js に DEPRECATED コードが残存** — `_scanProjectSkills_DEPRECATED` 等の関数が L107-188 に残ってる可能性。scanner.js に移行済みだが完全削除未確認
-2. **Team 実行の Stop hook 連携** — autopilotStopListener と teamStopListener が別変数で管理されてるが、同時実行時の排他制御なし
-3. **cmux send がバックグラウンドプロセスから動かない** — サーバーは cmux ペインでフォアグラウンド起動必須
+### v0.5.0 で修正済み (2026-03-27)
+1. ~~**server.js に DEPRECATED コードが残存**~~ — 確認の結果 v0.4.0 で既に削除済みだった
+2. ~~**Team/Autopilot 排他制御**~~ — 共有リスナー (activeStopListener/activeStopOwner) で排他制御を実装。同時起動を API レベルで防止
+3. ~~**cmux send バックグラウンド問題**~~ — 設計上の制約としてエラーメッセージを改善。ドキュメント化済み
+4. ~~**server.js バージョン不一致 (v0.3.3)**~~ — ヘッダーとバナーを v0.4.0 に統一
+5. ~~**autopilot ループ内の dynamic import**~~ — トップレベル import に移動。未使用の child_process exec も削除
+6. ~~**テストなし**~~ — gate-engine (26件) + scanner (12件) + cmux-bridge (9件) = 計44テスト追加
+7. ~~**レトロモード JS 未実装**~~ — コナミコマンド (↑↑↓↓←→←→BA) でトグル実装
+8. ~~**npm パッケージ公開準備**~~ — LICENSE (MIT), .npmignore, package.json files/test 整備
 
-### 要確認（dog fooding で検証）
+### 要確認（dog fooding で検証 — UI はブラウザで手動確認が必要）
 - Ctrl+K コマンドパレットの動作
 - Autopilot の実行フロー（Start → substep 順次実行 → Stop hook 検知 → 次 substep）
 - Agent Teams の実行フロー
 - Prompt Library の Save/Run
 - Plugin Install ボタンの動作
 - 日本語入力で Enter が送信されないか
+- コナミコマンドでレトロモードが切り替わるか
 
 ### 次のTODO
-1. **Dog fooding** — このリポジトリの `.claude-pilot/workflow.yml` を使って開発する
-2. **DEPRECATED コード完全削除** — server.js のクリーンアップ
-3. **テスト追加** — gate-engine, scanner, cmux-bridge の自動テスト
-4. **UI 磨き込み** — CSS は style.css に分離済み。レトロモード（コナミコマンド）CSS 実装済みだが JS 未実装
-5. **npm パッケージ公開準備** — LICENSE, .npmignore 等
-6. **GitHub リポジトリ作成** — リモート設定 + CI
+1. **GitHub リポジトリ作成** — リモート設定 + CI
+2. **プラグイン同梱配布** — scaffold 時に global-plugin を自動セットアップする機能（検討中）
+3. **npm publish** — パッケージ公開
 
 ---
 
@@ -175,3 +178,9 @@ CLI args > `.claude-pilot/config.yml` > env vars > defaults
 - **dog fooding しないと機能の使い勝手がわからない** — PRD ディレクトリを作ったがワークフローを通してなかった
 - **cmux のバックグラウンドプロセスからソケット接続が切れる** — フォアグラウンドペインで起動必須
 - **`execFile` vs `exec`** — cmux は exec（シェル経由）の方が安定した場面もあったが、最終的に execFile + --socket で解決
+
+### v0.5.0 開発 (2026-03-27)
+- Dog fooding: `.local/prd/prd-v0.5.0/` を作成し、自身の workflow.yml に従って開発
+- 全 DEVELOPMENT.md TODO を一括対応
+- テストスイート新設: `npm test` で 44 テスト全パス
+- 排他制御の設計: team/autopilot で共有 stop listener パターンを採用

@@ -949,6 +949,17 @@ document.addEventListener('keydown',e=>{
     else{closeSp();closeSkillDetail()}
   }
 });
+
+/* Konami code: ↑↑↓↓←→←→BA → toggle retro mode */
+(function(){
+  const seq=['ArrowUp','ArrowUp','ArrowDown','ArrowDown','ArrowLeft','ArrowRight','ArrowLeft','ArrowRight','b','a'];
+  let pos=0;
+  document.addEventListener('keydown',e=>{
+    if(e.key===seq[pos]){pos++;if(pos===seq.length){document.body.classList.toggle('retro');pos=0}}
+    else{pos=e.key===seq[0]?1:0}
+  });
+})();
+
 init();
 </script>
 </body>

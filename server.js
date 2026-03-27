@@ -1,5 +1,5 @@
 /**
- * Claude Pilot v0.3.3 — Development Cockpit with Agent SDK + PRD Tracking
+ * Claude Pilot v0.4.0 — Development Cockpit with Agent SDK + PRD Tracking
  *
  *   node server.js --project /path/to/project [--port 3456]
  *                   [--prd-root .local/prd] [--state-dir .local/claude_pilot/state]
@@ -14,6 +14,7 @@ import { query } from "@anthropic-ai/claude-agent-sdk";
 import { CmuxBridge } from "./cmux-bridge.js";
 import { evaluateGates, evaluateSubsteps, readFileSafe } from "./gate-engine.js";
 import { scanProjectSkills, scaffoldWorkflow } from "./scanner.js";
+import { execFile } from "child_process";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const cmux = new CmuxBridge();
@@ -608,12 +609,33 @@ app.get("/api/live", (_r, res) => {
 
 let autopilot = { running: false, paused: false, currentStep: null, currentSubstep: null };
 
+// ── Shared stop listener (mutual exclusion for autopilot/team) ──
+let activeStopListener = null;
+let activeStopOwner = null; // "autopilot" | "team"
+
+function setStopListener(owner, handler) {
+  activeStopOwner = owner;
+  activeStopListener = handler;
+}
+
+function clearStopListener(owner) {
+  if (activeStopOwner === owner) {
+    activeStopListener = null;
+    activeStopOwner = null;
+  }
+}
+
+function notifyStop() {
+  if (activeStopListener) activeStopListener();
+}
+
 app.get("/api/autopilot/status", (_r, res) => {
   res.json(autopilot);
 });
 
 app.post("/api/autopilot/start", async (req, res) => {
   if (autopilot.running) return res.status(409).json({ error: "Autopilot already running" });
+  if (teamQueue.running) return res.status(409).json({ error: "A team is running. Stop it before starting autopilot." });
   if (!activePrdId) return res.status(400).json({ error: "No active PRD" });
   if (!cmux.available) return res.status(503).json({ error: "cmux required for autopilot" });
 
@@ -654,9 +676,8 @@ app.post("/api/autopilot/start", async (req, res) => {
       }
 
       // Check if substep is already done
-      const { evaluateSubsteps: evalSS } = await import("./gate-engine.js");
       const stepDir = path.join(prdDir, step.dir || step.id);
-      const ssResults = evalSS(stepDir, substeps);
+      const ssResults = evaluateSubsteps(stepDir, substeps);
       const ssStatus = ssResults.find(s => s.id === ss.id);
       if (ssStatus?.status === "done") continue;
 
@@ -675,14 +696,14 @@ app.post("/api/autopilot/start", async (req, res) => {
       // Wait for completion (Stop hook)
       await new Promise(resolve => {
         const timeout = setTimeout(() => {
-          autopilotStopListener = null;
+          clearStopListener("autopilot");
           resolve();
         }, 300000); // 5 min max per substep
-        autopilotStopListener = () => {
+        setStopListener("autopilot", () => {
           clearTimeout(timeout);
-          autopilotStopListener = null;
+          clearStopListener("autopilot");
           setTimeout(resolve, 2000); // delay between substeps
-        };
+        });
       });
     }
 
@@ -707,8 +728,6 @@ app.post("/api/autopilot/stop", (_r, res) => {
   broadcast({ type: "autopilot_status", ...autopilot });
   res.json({ ok: true });
 });
-
-let autopilotStopListener = null;
 
 // ── Prompt Library ──────────────────────────────
 
@@ -760,7 +779,6 @@ app.post("/api/prompts/run", async (req, res) => {
 
 app.get("/api/plugins/marketplace", async (_r, res) => {
   try {
-    const { exec } = await import("child_process");
     const manifestPath = path.join(process.env.HOME || "", ".claude/plugins/marketplaces/claude-plugins-official/.claude-plugin/marketplace.json");
     const content = readFileSafe(manifestPath);
     if (!content) return res.json({ plugins: [], error: "Marketplace not found. Run: claude plugin marketplace update" });
@@ -788,7 +806,6 @@ app.post("/api/plugins/install", async (req, res) => {
   const { name, scope } = req.body;
   if (!name) return res.status(400).json({ error: "name required" });
   try {
-    const { execFile } = await import("child_process");
     const result = await new Promise((resolve, reject) => {
       execFile("claude", ["plugin", "install", name, "--scope", scope || "project"], { timeout: 30000 }, (err, stdout, stderr) => {
         if (err) reject(new Error(stderr || err.message));
@@ -888,6 +905,7 @@ app.post("/api/team/run", async (req, res) => {
   const team = teams.find(t => t.id === teamId);
   if (!team) return res.status(404).json({ error: "Team not found" });
   if (teamQueue.running) return res.status(409).json({ error: "A team is already running" });
+  if (autopilot.running) return res.status(409).json({ error: "Autopilot is running. Stop it before starting a team." });
 
   const skills = (team.skills || []).map(s => typeof s === "string" ? s : s.name || s);
   if (skills.length === 0) return res.status(400).json({ error: "Team has no skills" });
@@ -919,15 +937,15 @@ app.post("/api/team/run", async (req, res) => {
       // Wait for the skill to complete (Stop hook or timeout)
       if (i < skills.length - 1 && team.mode === "sequential") {
         await new Promise(resolve => {
-          const timeout = setTimeout(resolve, 120000); // 2 min max per skill
-          const handler = (hookEvent) => {
-            if (hookEvent === "Stop") {
-              clearTimeout(timeout);
-              teamStopListener = null;
-              setTimeout(resolve, 1000); // small delay between skills
-            }
-          };
-          teamStopListener = handler;
+          const timeout = setTimeout(() => {
+            clearStopListener("team");
+            resolve();
+          }, 120000); // 2 min max per skill
+          setStopListener("team", () => {
+            clearTimeout(timeout);
+            clearStopListener("team");
+            setTimeout(resolve, 1000); // small delay between skills
+          });
         });
       }
     }
@@ -935,13 +953,11 @@ app.post("/api/team/run", async (req, res) => {
 
   teamQueue.running = false;
   teamQueue.current = null;
-  teamStopListener = null;
+  clearStopListener("team");
   addEvent("default", "Team", `Completed: ${team.label}`);
   broadcast({ type: "team_status", running: false, teamId });
   if (cmux.available) cmux.log("success", "pilot", `Team done: ${team.label}`);
 });
-
-let teamStopListener = null;
 
 // ── Step control ────────────────────────────────
 
@@ -1060,10 +1076,9 @@ app.post("/hooks/:event", (req, res) => {
     debouncedPrdRefresh(sid);
   }
 
-  // Notify team/autopilot of Stop event
+  // Notify team/autopilot of Stop event (mutual exclusion via shared listener)
   if (hookEvent === "Stop") {
-    if (teamStopListener) teamStopListener("Stop");
-    if (autopilotStopListener) autopilotStopListener();
+    notifyStop();
   }
 
   broadcastStepUpdate(sid, s);
@@ -1081,7 +1096,7 @@ app.listen(PORT, async () => {
   const prds = discoverPrds();
   const cmuxStatus = cmux.available ? `workspace:${cmux.workspaceId?.slice(0, 8)}` : "not available";
   console.log(`
-  Claude Pilot v0.3.3  http://localhost:${PORT}
+  Claude Pilot v0.4.0  http://localhost:${PORT}
    Project:  ${PROJECT_NAME} (${PROJECT_DIR})
    Workflow: ${workflow?.name || "Default"}
    PRDs:     ${prds.length} found

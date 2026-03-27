@@ -90,9 +90,15 @@ export class CmuxBridge {
 
   async sendToClaudeCode(text, surfaceRef) {
     const target = surfaceRef || this.getDefaultClaudeSurface();
-    if (!target) return false;
+    if (!target) {
+      console.error("  cmux: No Claude Code surface found. Ensure the server runs in a cmux foreground pane.");
+      return false;
+    }
     const sent = await this.sendToSurface(target, text);
-    if (!sent) return false;
+    if (!sent) {
+      console.error(`  cmux: Failed to send to ${target}. The server must run in a cmux foreground pane (not background).`);
+      return false;
+    }
     return this.sendKey(target, "enter");
   }
 
