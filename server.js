@@ -456,14 +456,34 @@ function syncWorkflowSkills() {
   const liveSkills = new Map(); // name → { name, desc, type, source }
 
   for (const plugin of plugins) {
-    // Each plugin's skills become invocable as "/<plugin>:<skill>" or "/<skill>"
-    for (const sk of plugin.skills) {
+    // Skills: invocable as "/<plugin>:<skill>"
+    for (const sk of plugin.skills || []) {
       const name = `/${plugin.name}:${sk}`;
       liveSkills.set(name, {
         name,
         desc: `${sk} (${plugin.name} v${plugin.version})`,
         type: "prompt",
         source: "plugin",
+      });
+    }
+    // Commands: invocable as "/<command>"
+    for (const cmd of plugin.commands || []) {
+      const name = `/${plugin.name}:${cmd}`;
+      liveSkills.set(name, {
+        name,
+        desc: `${cmd} (${plugin.name} v${plugin.version})`,
+        type: "prompt",
+        source: "plugin-command",
+      });
+    }
+    // Agents: invocable as "use subagent <agent>"
+    for (const agent of plugin.agents || []) {
+      const name = `use subagent ${plugin.name}:${agent}`;
+      liveSkills.set(name, {
+        name,
+        desc: `${agent} (${plugin.name} v${plugin.version})`,
+        type: "prompt",
+        source: "plugin-agent",
       });
     }
   }

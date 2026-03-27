@@ -118,15 +118,23 @@ export function scanInstalledPlugins(projectDir) {
       try { meta = { ...meta, ...JSON.parse(pluginJsonContent) }; } catch {}
     }
 
-    // Scan skills inside the plugin
-    const skillsDir = path.join(installDir, "skills");
+    // Scan skills, commands, and agents inside the plugin
     const skillNames = [];
-    try {
-      for (const d of fs.readdirSync(skillsDir, { withFileTypes: true })) {
-        if (d.isDirectory()) skillNames.push(d.name);
-        else if (d.isFile() && d.name.endsWith(".md")) skillNames.push(d.name.replace(".md", ""));
-      }
-    } catch { /* no skills dir */ }
+    const commandNames = [];
+    const agentNames = [];
+
+    function scanPluginDir(dir, target) {
+      try {
+        for (const d of fs.readdirSync(dir, { withFileTypes: true })) {
+          if (d.isDirectory()) target.push(d.name);
+          else if (d.isFile() && d.name.endsWith(".md")) target.push(d.name.replace(".md", ""));
+        }
+      } catch { /* dir doesn't exist */ }
+    }
+
+    scanPluginDir(path.join(installDir, "skills"), skillNames);
+    scanPluginDir(path.join(installDir, "commands"), commandNames);
+    scanPluginDir(path.join(installDir, "agents"), agentNames);
 
     const enabled = !!enabledPlugins[key] || !!enabledPlugins[pluginName];
 
@@ -136,6 +144,8 @@ export function scanInstalledPlugins(projectDir) {
       version: meta.version,
       description: meta.description,
       skills: skillNames,
+      commands: commandNames,
+      agents: agentNames,
       enabled,
       scope: entry.scope || "unknown",
       installPath: installDir,
