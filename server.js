@@ -42,9 +42,38 @@ app.use((_req, res, next) => {
   next();
 });
 
-app.use(express.static(path.join(__dirname, "public")));
+app.use(express.static(path.join(__dirname, "public"), { etag: false, maxAge: 0 }));
 
 if (!fs.existsSync(STATE_DIR)) fs.mkdirSync(STATE_DIR, { recursive: true });
+
+// ── Debug endpoint (logs to server stdout) ──────
+const debugLogs = [];
+app.post("/api/debug", (req, res) => {
+  const { msg, data } = req.body;
+  const entry = `[UI] ${msg}${data ? " " + JSON.stringify(data) : ""}`;
+  console.log(entry);
+  debugLogs.push({ ts: Date.now(), msg, data });
+  if (debugLogs.length > 100) debugLogs.shift();
+  res.json({ ok: true });
+});
+app.get("/api/debug/cmux", async (_r, res) => {
+  await cmux.ready;
+  const target = cmux.getDefaultClaudeSurface();
+  const testSend = await cmux.sendToSurface(target, "echo debug-test");
+  const testKey = await cmux.sendKey(target, "enter");
+  const testFull = await cmux.sendToClaudeCode("echo full-test");
+  res.json({
+    available: cmux.available,
+    socketPath: cmux.socketPath,
+    workspaceId: cmux.workspaceId,
+    surfaces: cmux.claudeSurfaces,
+    defaultSurface: target,
+    testSendResult: testSend,
+    testKeyResult: testKey,
+    testFullResult: testFull,
+  });
+});
+app.get("/api/debug", (_r, res) => res.json({ logs: debugLogs.slice(-20) }));
 
 // ── PID file for safe restart ───────────────────
 const PID_FILE = path.join(STATE_DIR, "_server.pid");
@@ -423,10 +452,11 @@ app.post("/api/cmux-send", async (req, res) => {
   if (!prompt) return res.status(400).json({ error: "prompt required" });
   if (!cmux.available) return res.status(503).json({ error: "cmux not available" });
 
+  console.log(`  [cmux-send] prompt="${prompt}", surface=${cmux.getDefaultClaudeSurface()}, available=${cmux.available}`);
   const ok = await cmux.sendToClaudeCode(prompt, surfaceRef);
+  console.log(`  [cmux-send] result=${ok}`);
   if (ok) {
     addEvent("default", "Send", `→ Terminal: ${prompt.length > 100 ? prompt.slice(0, 100) + "..." : prompt}`);
-    cmux.log("info", "pilot", `Sent: ${prompt.slice(0, 80)}`);
   }
   res.json({ ok, message: ok ? "Sent to Claude Code terminal" : "Failed to send" });
 });

@@ -109,7 +109,12 @@ async function cmdServer() {
     "--state-dir", config.stateDir,
   ];
 
-  const child = spawn("node", serverArgs, { stdio: "inherit", env: { ...process.env } });
+  const child = spawn("node", serverArgs, {
+    stdio: ["inherit", "pipe", "pipe"],
+    env: { ...process.env },
+  });
+  child.stdout.pipe(process.stdout);
+  child.stderr.pipe(process.stderr);
   child.on("exit", (code) => process.exit(code || 0));
   process.on("SIGTERM", () => child.kill("SIGTERM"));
   process.on("SIGINT", () => child.kill("SIGINT"));
