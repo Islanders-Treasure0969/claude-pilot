@@ -211,13 +211,15 @@ function showSkillDetail(skill,eventOrEl,isHover){
   const rect=target.getBoundingClientRect();
   const pop=document.createElement('div');
   pop.className='sk-detail';
+  // Skills that can run without arguments: check skill.selfContained flag or fallback pattern
+  const selfContained=skill.selfContained||/^\/simplify$|^\/hookify:hookify$/i.test(skill.name);
   pop.innerHTML=`
     <div class="sk-name">${h(skill.name)}</div>
     <div class="sk-desc">${h(skill.desc||'No description')}</div>
     <div class="sk-type">${skill.type==='prompt'?'Claude prompt':'Shell command'}</div>
     <div class="sk-actions">
-      <button class="sk-run">${cmuxMode?'Send to Terminal':'Run'}</button>
-      <button class="sk-fill">Edit &amp; ${cmuxMode?'Send':'Run'}</button>
+      ${selfContained?`<button class="sk-run">${cmuxMode?'Send to Terminal':'Run'}</button>`:''}
+      <button class="sk-fill">${selfContained?'Edit &amp; Send':'Use (edit before sending)'}</button>
     </div>`;
   document.body.appendChild(pop);
   let top=rect.bottom+4;
@@ -226,18 +228,23 @@ function showSkillDetail(skill,eventOrEl,isHover){
   pop.style.top=top+'px';
   pop.style.left=Math.max(4,left)+'px';
   activePopover=pop;
-  pop.querySelector('.sk-run').onclick=(e)=>{
-    e.stopPropagation();
-    dbg('sk-run clicked',{skill:skill.name});
-    closeSkillDetail();
-    document.getElementById('cmd-i').value=skill.name;
-    runCommand();
-  };
+  const runBtn=pop.querySelector('.sk-run');
+  if(runBtn){
+    runBtn.onclick=(e)=>{
+      e.stopPropagation();
+      dbg('sk-run clicked',{skill:skill.name});
+      closeSkillDetail();
+      document.getElementById('cmd-i').value=skill.name;
+      runCommand();
+    };
+  }
   pop.querySelector('.sk-fill').onclick=(e)=>{
     e.stopPropagation();
     closeSkillDetail();
-    document.getElementById('cmd-i').value=skill.name;
-    document.getElementById('cmd-i').focus();
+    const input=document.getElementById('cmd-i');
+    input.value=skill.name+' ';
+    input.focus();
+    input.placeholder=skill.desc?`${skill.name} <${skill.desc.slice(0,30)}...>`:'Add context and press Enter';
   };
   pop.onmouseenter=()=>{if(hoverTimer)clearTimeout(hoverTimer)};
   pop.onmouseleave=()=>{hoverTimer=setTimeout(closeSkillDetail,300)};
@@ -442,6 +449,7 @@ async function runCommand(){
   dbg('runCommand',{prompt,cmuxMode});
   if(!prompt)return;
   input.value='';
+  input.placeholder=cmuxMode?'command or prompt... (Enter to send to terminal)':'prompt...';
 
   // Handle /batch command: /batch /skill1 /skill2 /skill3
   if(prompt.startsWith('/batch ')){

@@ -150,6 +150,7 @@ function mapSkills(skills) {
   return (skills || []).map(sk => ({
     name: sk.name, desc: sk.desc || sk.description || "",
     type: sk.type || "bash",
+    ...(sk.selfContained ? { selfContained: true } : {}),
   }));
 }
 
