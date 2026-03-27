@@ -9,7 +9,9 @@
   },
   "scripts": {
     "start": "node server.js",
-    "test": "node --test test/*.test.js"
+    "test": "node --test test/*.test.js",
+    "test:e2e": "npx playwright test",
+    "test:all": "npm test && npx playwright test"
   },
   "files": [
     "cli.js",
@@ -21,11 +23,20 @@
     "README.md",
     "LICENSE"
   ],
-  "keywords": ["claude", "claude-code", "developer-tools", "workflow", "cmux"],
+  "keywords": [
+    "claude",
+    "claude-code",
+    "developer-tools",
+    "workflow",
+    "cmux"
+  ],
   "license": "MIT",
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.1.0",
     "express": "^4.21.0",
     "js-yaml": "^4.1.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.58.2"
   }
 }
