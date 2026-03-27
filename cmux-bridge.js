@@ -47,13 +47,35 @@ export class CmuxBridge {
     if (!this.available) return [];
     try {
       const tree = await this.exec(["tree", "--workspace", this.workspaceId]);
-      const surfaces = [];
+      const allTerminals = [];
+      const claudeMatches = [];
+      const hereMatches = [];
+
       for (const line of tree.split("\n")) {
-        const match = line.match(/(surface:\d+)\s+\[terminal\]\s+"([^"]*Claude[^"]*)"/i);
-        if (match) surfaces.push({ ref: match[1], title: match[2] });
+        // Match all terminal surfaces
+        const termMatch = line.match(/(surface:\d+)\s+\[terminal\]\s+"([^"]*)"/);
+        if (!termMatch) continue;
+        const ref = termMatch[1];
+        const title = termMatch[2];
+        allTerminals.push({ ref, title });
+
+        // Priority 1: title starts with or contains "Claude Code" or "claude>" (not path containing "claude")
+        if (/\bclaude\s*(code|>|\|)/i.test(title) || /^claude\b/i.test(title)) claudeMatches.push({ ref, title });
+        // Priority 2: line contains "here" marker (current Claude Code session)
+        if (/here/.test(line)) hereMatches.push({ ref, title });
       }
-      this.claudeSurfaces = surfaces;
-      return surfaces;
+
+      // Use best available match
+      if (claudeMatches.length > 0) {
+        this.claudeSurfaces = claudeMatches;
+      } else if (hereMatches.length > 0) {
+        this.claudeSurfaces = hereMatches;
+      } else {
+        // Filter out known non-Claude surfaces (Yazi, etc)
+        const filtered = allTerminals.filter(s => !/^Yazi:|^vim:|^nvim:/i.test(s.title));
+        this.claudeSurfaces = filtered;
+      }
+      return this.claudeSurfaces;
     } catch {
       return this.claudeSurfaces;
     }
