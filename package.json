@@ -1,0 +1,20 @@
+{
+  "name": "claude-pilot",
+  "version": "0.4.0",
+  "description": "Development cockpit for Claude Code — workflow visualization, skill suggestions, cmux integration",
+  "main": "server.js",
+  "type": "module",
+  "bin": {
+    "claude-pilot": "./cli.js"
+  },
+  "scripts": {
+    "start": "node server.js"
+  },
+  "keywords": ["claude", "claude-code", "developer-tools", "workflow", "cmux"],
+  "license": "MIT",
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.1.0",
+    "express": "^4.21.0",
+    "js-yaml": "^4.1.0"
+  }
+}

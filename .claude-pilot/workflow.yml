@@ -1,0 +1,166 @@
+# Claude Pilot — App Development Workflow
+# Dog fooding: このファイル自体が Claude Pilot で管理される
+
+name: "Claude Pilot Dev"
+description: "Feature request -> Design -> Implement -> Review -> Ship"
+
+defaults:
+  suggestions:
+    - name: "新しい機能のPRDを作成して"
+      desc: "ユーザーストーリーからPRDを作成"
+      type: prompt
+
+global:
+  label: "Global Skills"
+  categories:
+    - name: "Quality"
+      skills:
+        - name: "/simplify"
+          desc: "コード品質レビュー+自動修正"
+          type: prompt
+        - name: "/code-review"
+          desc: "PRコードレビュー"
+          type: prompt
+    - name: "Maintenance"
+      skills:
+        - name: "/claude-md-management:claude-md-improver"
+          desc: "CLAUDE.md監査・改善"
+          type: prompt
+        - name: "/hookify:hookify"
+          desc: "会話パターンからHook自動生成"
+          type: prompt
+        - name: "/skill-creator:skill-creator"
+          desc: "スキル作成・改善"
+          type: prompt
+
+teams:
+  - id: full-review
+    label: "Full Review"
+    desc: "品質+コードレビューを順次実行"
+    mode: sequential
+    skills:
+      - "/simplify"
+      - "/code-review"
+
+steps:
+  - id: requirements
+    label: "Requirements"
+    description: "ユーザーストーリー整理・要件定義"
+    dir: "requirements"
+    gate:
+      rules:
+        - type: checklist
+          file: "stories.md"
+    substeps:
+      - id: stories
+        name: "ユーザーストーリーを整理して stories.md に書いて"
+        desc: "US-1, US-2... 形式でユーザーストーリーを定義"
+        type: prompt
+        check:
+          type: file_exists
+          file: "stories.md"
+      - id: acceptance
+        name: "受入条件を各ストーリーに追記して"
+        desc: "Given/When/Then または箇条書きで受入条件を定義"
+        type: prompt
+        check:
+          type: checklist
+          file: "stories.md"
+
+  - id: design
+    label: "Design"
+    description: "技術設計・API設計・UIモック"
+    dir: "design"
+    gate:
+      depends_on: ["requirements"]
+      rules:
+        - type: file_exists
+          file: "design.md"
+    substeps:
+      - id: api-design
+        name: "API設計を design.md に書いて"
+        desc: "エンドポイント・リクエスト/レスポンス・データフロー"
+        type: prompt
+        check:
+          type: file_exists
+          file: "design.md"
+      - id: ui-design
+        name: "UI設計を design.md に追記して"
+        desc: "画面構成・操作フロー・コンポーネント構造"
+        type: prompt
+
+  - id: implement
+    label: "Implement"
+    description: "コード実装"
+    dir: "implement"
+    gate:
+      depends_on: ["design"]
+      rules:
+        - type: checklist
+          file: "tasks.md"
+    substeps:
+      - id: task-breakdown
+        name: "設計をタスクに分解して tasks.md を作成して"
+        desc: "実装タスクをチェックリスト形式で定義"
+        type: prompt
+        check:
+          type: file_exists
+          file: "tasks.md"
+      - id: code
+        name: "タスクを実装して"
+        desc: "tasks.md の未完了タスクを実装"
+        type: prompt
+      - id: test-manual
+        name: "node cli.js --help"
+        desc: "手動テスト"
+        type: bash
+
+  - id: review
+    label: "Review"
+    description: "コードレビュー・品質チェック"
+    dir: "review"
+    gate:
+      depends_on: ["implement"]
+      rules:
+        - type: keyword
+          file: "review.md"
+          keyword: "PASS"
+    substeps:
+      - id: simplify
+        name: "/simplify"
+        desc: "コード品質自動修正"
+        type: prompt
+      - id: review
+        name: "/code-review"
+        desc: "コードレビュー"
+        type: prompt
+        check:
+          type: keyword
+          file: "review.md"
+          keyword: "PASS"
+
+  - id: ship
+    label: "Ship"
+    description: "リリース・ドキュメント更新"
+    dir: "ship"
+    gate:
+      depends_on: ["review"]
+      rules:
+        - type: file_exists
+          file: "changelog.md"
+    substeps:
+      - id: changelog
+        name: "CHANGELOG を更新して"
+        desc: "変更内容をCHANGELOGに追記"
+        type: prompt
+        check:
+          type: file_exists
+          file: "changelog.md"
+      - id: version
+        name: "package.json のバージョンを更新して"
+        desc: "セマンティックバージョニングに従って更新"
+        type: prompt
+      - id: commit
+        name: "git add -A && git commit"
+        desc: "変更をコミット"
+        type: bash

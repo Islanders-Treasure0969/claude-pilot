@@ -1,0 +1,955 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Claude Pilot</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="hd" style="position:relative">
+  <div class="dot" id="beacon"></div>
+  <span class="t">Claude Pilot</span>
+  <span class="proj" id="proj"></span>
+  <button class="gb-toggle" id="gb-toggle" onclick="toggleGlobal()">Skills</button>
+  <span class="agent-badge" id="agent-badge">RUNNING</span>
+  <span class="team-running" id="team-badge">TEAM</span>
+  <div class="prd-sel">
+    <span class="prd-id" id="prd-id"></span>
+    <select id="prd-select" onchange="selectPrd(this.value)">
+      <option value="">-- PRD --</option>
+    </select>
+    <span class="prd-progress" id="prd-progress"></span>
+    <button class="refresh-btn" onclick="refreshPrd()" title="Refresh phase status">R</button>
+  </div>
+  <button class="cfg-toggle" id="cfg-toggle" onclick="toggleConfig()">Config</button>
+  <div class="gb-panel" id="global-panel">
+    <div class="gb-grid" id="global-grid"></div>
+  </div>
+  <div class="cfg-panel" id="cfg-panel"></div>
+</div>
+
+<!-- Command Palette -->
+<div class="palette-overlay" id="palette-overlay" onclick="if(event.target===this)closePalette()">
+  <div class="palette">
+    <input id="palette-input" placeholder="Search skills... (Ctrl+K)" autocomplete="off">
+    <div class="palette-list" id="palette-list"></div>
+  </div>
+</div>
+
+<div class="pl"><div class="plr" id="pipeline"></div></div>
+
+<div class="sp" id="sp">
+  <div class="sp-h">
+    <span class="sl" id="sp-l"></span>
+    <span class="sd" id="sp-d"></span>
+    <button class="x" onclick="closeSp()">x</button>
+  </div>
+  <div class="sk-row" id="sp-sk"></div>
+  <ul class="tips" id="sp-tp"></ul>
+</div>
+
+<div class="main-split">
+  <div class="lg">
+    <div class="lg-h">
+      <span>Events</span>
+      <button class="filter-btn active" id="filter-all" onclick="setEventFilter('all')">All</button>
+      <button class="filter-btn" id="filter-session" onclick="setEventFilter('session')">This Session</button>
+      <button class="filter-btn" id="filter-pilot" onclick="setEventFilter('pilot')">Pilot Only</button>
+      <span class="c" id="lc">0</span>
+    </div>
+    <div class="lg-s" id="ls"></div>
+  </div>
+  <div class="out" id="out"></div>
+</div>
+
+<div class="autopilot-bar" id="autopilot-bar">
+  <span class="ap-label">Autopilot</span>
+  <span class="ap-status" id="ap-status">Ready</span>
+  <button class="ap-btn" id="ap-start" onclick="startAutopilot()">Start</button>
+  <button class="ap-btn" id="ap-pause" onclick="pauseAutopilot()" style="display:none">Pause</button>
+  <button class="ap-btn danger" id="ap-stop" onclick="stopAutopilot()" style="display:none">Stop</button>
+</div>
+
+<div class="sug" id="sug-bar"></div>
+
+<!-- Prompt Save Dialog -->
+<div class="prompt-dialog" id="prompt-dialog">
+  <div class="prompt-form">
+    <div style="font-size:12px;font-weight:600;color:var(--txb);margin-bottom:10px">Save Prompt</div>
+    <input id="prompt-name" placeholder="Prompt name">
+    <input id="prompt-desc" placeholder="Description (optional)">
+    <textarea id="prompt-text" placeholder="Prompt text"></textarea>
+    <input id="prompt-tags" placeholder="Tags (comma separated)">
+    <div class="pf-actions">
+      <button class="ap-btn" onclick="closePromptDialog()">Cancel</button>
+      <button class="cfg-action" onclick="savePrompt()">Save</button>
+    </div>
+  </div>
+</div>
+
+<div class="cmd">
+  <div class="cmd-w">
+    <input class="cmd-i" id="cmd-i" type="text"
+           placeholder="command or prompt... (Enter)" autocomplete="off">
+  </div>
+  <button class="cmd-b" id="cmd-b" onclick="runCommand()">Run</button>
+  <button class="ap-btn" onclick="openPromptDialog(document.getElementById('cmd-i').value)" title="Save as prompt">Save</button>
+</div>
+
+<div class="cb">
+  <span class="lbl">Step</span>
+  <div id="cbtns"></div>
+</div>
+
+<script>
+let W={steps:[]},selStep=null,sts={},gts={},ec=0,agentBusy=false,activePrd=null,prevStsKey='',lastGlobalKey='';
+let cmuxMode=false,substepSts={},currentSuggestions=[];
+
+function postJson(url,data){return fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)})}
+
+function renderUI(){renderGlobal();renderPipe();renderCtrl();renderSuggestions();updateAutopilotUI(autopilotState)}
+let autopilotState={running:false,paused:false};
+
+function createSkillChip(skill,cssClass){
+  const el=document.createElement(cssClass==='gsk'?'span':'div');
+  el.className=cssClass;
+  const badge=skill.type==='prompt'?'prompt':'bash';
+  el.innerHTML=`<span class="badge">${badge}</span>${h(skill.name)}`;
+  el.onclick=(e)=>showSkillDetail(skill,e,false);
+  attachSkillHover(el,skill);
+  return el;
+}
+
+let globalPanelOpen=false;
+
+function renderGlobal(){
+  const g=W.global;
+  const key=JSON.stringify(g);
+  if(key===lastGlobalKey)return;
+  lastGlobalKey=key;
+  const grid=document.getElementById('global-grid');
+  const toggle=document.getElementById('gb-toggle');
+  if(!g||!(g.skills||[]).length){
+    grid.innerHTML='';
+    toggle.style.display='none';
+    return;
+  }
+  toggle.style.display='';
+  const allSkills=(g.skills||[]);
+  toggle.textContent=`Global Skills (${allSkills.length})`;
+  grid.innerHTML='';
+  if(g.categories&&g.categories.length>0){
+    g.categories.forEach(cat=>{
+      const label=document.createElement('span');
+      label.className='gb-cat';
+      label.textContent=cat.name;
+      grid.appendChild(label);
+      (cat.skills||[]).forEach(s=>grid.appendChild(createSkillChip(s,'gsk')));
+    });
+  } else {
+    allSkills.forEach(s=>grid.appendChild(createSkillChip(s,'gsk')));
+  }
+  // Teams
+  const teams=W.teams||[];
+  if(teams.length>0){
+    const label=document.createElement('span');
+    label.className='gb-cat';
+    label.textContent='Teams';
+    grid.appendChild(label);
+    teams.forEach(t=>{
+      const el=document.createElement('span');
+      el.className='team-chip';
+      el.innerHTML=`<span class="badge">${t.mode||'seq'}</span>${h(t.label)}`;
+      el.title=t.desc||'';
+      el.onclick=()=>runTeam(t.id,t.label,t.desc);
+      grid.appendChild(el);
+    });
+  }
+}
+
+function renderSuggestions(){
+  const bar=document.getElementById('sug-bar');
+  // Use server-provided suggestions, or defaults from workflow
+  let suggestions=currentSuggestions||[];
+  if(!activePrd&&(!suggestions||suggestions.length===0)){
+    suggestions=(W.defaults&&W.defaults.suggestions)||[];
+  }
+  if(suggestions.length===0){bar.classList.remove('show');return}
+  bar.classList.add('show');
+  bar.innerHTML='<span class="sug-l">Suggested</span>';
+  suggestions.slice(0,3).forEach(s=>{
+    const el=document.createElement('span');
+    el.className='sug-chip';
+    const badge=(s.type||'prompt')==='prompt'?'prompt':'bash';
+    el.innerHTML=`<span class="badge">${badge}</span>${h(s.name)}`;
+    el.onclick=(e)=>showSkillDetail(s,e,false);
+    attachSkillHover(el,s);
+    bar.appendChild(el);
+  });
+}
+
+function toggleGlobal(){
+  globalPanelOpen=!globalPanelOpen;
+  document.getElementById('global-panel').classList.toggle('open',globalPanelOpen);
+  document.getElementById('gb-toggle').classList.toggle('open',globalPanelOpen);
+}
+
+/* Skill detail popover */
+let activePopover=null;
+let hoverTimer=null;
+
+function showSkillDetail(skill,eventOrEl,isHover){
+  closeSkillDetail();
+  const target=eventOrEl instanceof HTMLElement?eventOrEl:(eventOrEl.currentTarget||eventOrEl.target);
+  if(!target)return;
+  const rect=target.getBoundingClientRect();
+  const pop=document.createElement('div');
+  pop.className='sk-detail';
+  pop.innerHTML=`
+    <div class="sk-name">${h(skill.name)}</div>
+    <div class="sk-desc">${h(skill.desc||'No description')}</div>
+    <div class="sk-type">${skill.type==='prompt'?'Claude prompt':'Shell command'}</div>
+    <div class="sk-actions">
+      <button class="sk-run">${cmuxMode?'Send to Terminal':'Run'}</button>
+      <button class="sk-fill">Edit &amp; ${cmuxMode?'Send':'Run'}</button>
+    </div>`;
+  document.body.appendChild(pop);
+  let top=rect.bottom+4;
+  let left=Math.min(rect.left,window.innerWidth-pop.offsetWidth-10);
+  if(top+pop.offsetHeight>window.innerHeight)top=rect.top-pop.offsetHeight-4;
+  pop.style.top=top+'px';
+  pop.style.left=Math.max(4,left)+'px';
+  activePopover=pop;
+  pop.querySelector('.sk-run').onclick=(e)=>{
+    e.stopPropagation();
+    closeSkillDetail();
+    document.getElementById('cmd-i').value=skill.name;
+    runCommand();
+  };
+  pop.querySelector('.sk-fill').onclick=(e)=>{
+    e.stopPropagation();
+    closeSkillDetail();
+    document.getElementById('cmd-i').value=skill.name;
+    document.getElementById('cmd-i').focus();
+  };
+  pop.onmouseenter=()=>{if(hoverTimer)clearTimeout(hoverTimer)};
+  pop.onmouseleave=()=>{hoverTimer=setTimeout(closeSkillDetail,300)};
+  if(!isHover){
+    setTimeout(()=>document.addEventListener('click',onClickOutsidePopover,{once:true}),0);
+  }
+}
+
+function attachSkillHover(el,skill){
+  el.onmouseenter=()=>{
+    if(hoverTimer)clearTimeout(hoverTimer);
+    hoverTimer=setTimeout(()=>showSkillDetail(skill,el,true),400);
+  };
+  el.onmouseleave=()=>{
+    if(hoverTimer){clearTimeout(hoverTimer);hoverTimer=null}
+    hoverTimer=setTimeout(closeSkillDetail,300);
+  };
+}
+
+function onClickOutsidePopover(e){
+  if(activePopover&&!activePopover.contains(e.target))closeSkillDetail();
+}
+function closeSkillDetail(){
+  if(activePopover){activePopover.remove();activePopover=null}
+}
+
+async function init(){
+  W=await(await fetch('/api/workflow')).json();
+  document.getElementById('proj').textContent=W.projectName||'';
+  // Detect cmux mode
+  try{
+    const ctx=await(await fetch('/api/cmux-context')).json();
+    cmuxMode=ctx.available||false;
+  }catch{cmuxMode=false}
+  updateCmuxUI();
+  renderUI();
+  await loadPrds();
+  connectSSE();
+}
+
+function updateCmuxUI(){
+  const btn=document.getElementById('cmd-b');
+  const input=document.getElementById('cmd-i');
+  if(cmuxMode){
+    btn.textContent='Send';
+    input.placeholder='command or prompt... (Enter to send to terminal)';
+  }else{
+    btn.textContent='Run';
+    input.placeholder='command or prompt... (Enter)';
+  }
+}
+
+/* PRD selector */
+async function loadPrds(){
+  try{
+    const data=await(await fetch('/api/prds')).json();
+    const sel=document.getElementById('prd-select');
+    sel.innerHTML='<option value="">-- PRD --</option>';
+    (data.prds||[]).forEach(p=>{
+      const opt=document.createElement('option');
+      opt.value=p.id;
+      opt.textContent=`${p.id} (${p.done}/${p.total})`;
+      sel.appendChild(opt);
+    });
+    if(data.activePrdId){
+      sel.value=data.activePrdId;
+      activePrd=data.activePrdId;
+      const prd=(data.prds||[]).find(p=>p.id===data.activePrdId);
+      if(prd){
+        sts=prd.statuses;
+        gts=prd.gates||{};
+        if(prd.suggestions)currentSuggestions=prd.suggestions;
+        if(prd.substepStatuses)substepSts=prd.substepStatuses;
+        updatePrdDisplay(prd);
+        renderUI();
+        if(prd.currentPhase)openSp(prd.currentPhase);
+      }
+    }
+  }catch(e){console.error('loadPrds:',e)}
+}
+
+async function selectPrd(prdId){
+  try{
+    const res=await postJson('/api/prd/select',{prdId:prdId||null});
+    if(!res.ok)console.error('selectPrd failed:',res.status);
+  }catch(e){console.error('selectPrd:',e);return}
+  activePrd=prdId||null;
+  if(!prdId){
+    sts={};gts={};
+    (W.steps||[]).forEach(s=>{sts[s.id]='pending'});
+    updatePrdDisplay(null);
+    renderUI();closeSp();
+  }
+}
+
+async function refreshPrd(){
+  if(!activePrd)return;
+  try{
+    const data=await(await postJson('/api/prd/refresh',{})).json();
+    if(data.statuses){
+      sts=data.statuses;
+      gts=data.gates||{};
+      updatePrdDisplay(data);
+      renderUI();
+    }
+  }catch(e){console.error('refreshPrd:',e)}
+}
+
+function updatePrdDisplay(prd){
+  const el=document.getElementById('prd-progress');
+  const idEl=document.getElementById('prd-id');
+  if(!prd||prd.done===undefined){
+    el.textContent='';idEl.textContent='';
+    document.title='Claude Pilot';
+    return;
+  }
+  el.textContent=`${prd.done}/${prd.total}`;
+  el.style.color=prd.done===prd.total?'var(--gr)':'var(--or)';
+  el.style.borderColor=prd.done===prd.total?'var(--grd)':'var(--bd)';
+  idEl.textContent=prd.id||activePrd||'';
+  document.title=activePrd?`${activePrd} - Claude Pilot`:'Claude Pilot';
+  if(prd.gates)gts=prd.gates;
+}
+
+/* Pipeline */
+function renderPipe(){
+  const el=document.getElementById('pipeline');el.innerHTML='';
+  (W.steps||[]).forEach((step,i)=>{
+    if(i>0){
+      const c=document.createElement('div');c.className='cn';
+      if(sts[W.steps[i-1].id]==='done')c.classList.add('d');
+      el.appendChild(c);
+    }
+    const n=document.createElement('div');
+    n.className='nd'+(selStep===step.id?' sel':'');
+    n.setAttribute('data-s',sts[step.id]||'pending');
+    const gate=gts[step.id]||'';
+    n.innerHTML=`<div class="i"></div><div><div>${h(step.label)}</div>${gate?`<div class="gate" title="${h(gate)}">${h(gate)}</div>`:''}</div>`;
+    n.onclick=()=>selStep===step.id?closeSp():openSp(step.id);
+    el.appendChild(n);
+  });
+}
+
+/* Suggest */
+function openSp(id){
+  selStep=id;
+  const step=W.steps.find(s=>s.id===id);if(!step)return;
+  document.getElementById('sp').classList.add('open');
+  document.getElementById('sp-l').textContent=step.label;
+  document.getElementById('sp-d').textContent=step.description||'';
+
+  const skEl=document.getElementById('sp-sk');
+  skEl.innerHTML='';
+
+  // Render substeps as mini-pipeline if available
+  const substeps=step.substeps||[];
+  const ssStatuses=substepSts[step.id]||[];
+  if(substeps.length>0){
+    const container=document.createElement('div');
+    container.className='substeps';
+    substeps.forEach(ss=>{
+      const ssStatus=ssStatuses.find(s=>s.id===ss.id);
+      const status=ssStatus?.status||'unknown';
+      const el=document.createElement('div');
+      el.className='ss';
+      el.setAttribute('data-s',status==='done'?'done':status==='active'?'active':'pending');
+      const badge=(ss.type||'prompt')==='prompt'?'prompt':'bash';
+      el.innerHTML=`<div class="ss-dot"></div><span class="ss-badge">${badge}</span><span class="ss-name">${h(ss.name)}</span><span class="ss-desc">${h(ss.desc||'')}</span>${ssStatus?.message?`<span class="ss-msg">${h(ssStatus.message)}</span>`:''}`;
+      el.onclick=(e)=>showSkillDetail({name:ss.name,desc:ss.desc,type:ss.type},e,false);
+      container.appendChild(el);
+    });
+    skEl.appendChild(container);
+  } else {
+    // Fallback: flat skill chips (legacy)
+    (step.skills||[]).forEach(s=>{
+      const cls=s.type==='prompt'?'sk prompt-type':'sk';
+      skEl.appendChild(createSkillChip(s,cls));
+    });
+  }
+
+  document.getElementById('sp-tp').innerHTML=(step.tips||[]).map(t=>`<li>${h(t)}</li>`).join('');
+  renderPipe();
+}
+function closeSp(){selStep=null;document.getElementById('sp').classList.remove('open');renderPipe()}
+
+/* Step control */
+function renderCtrl(){
+  const el=document.getElementById('cbtns');
+  el.innerHTML=(W.steps||[]).map(s=>{
+    const cls=sts[s.id]==='active'?'sb act':'sb';
+    return `<button class="${cls}" data-id="${h(s.id)}">${h(s.label)}</button>`;
+  }).join('');
+  el.querySelectorAll('button').forEach(btn=>{
+    btn.ondblclick=()=>postJson('/api/step',{sessionId:'default',stepId:btn.dataset.id,action:'start'});
+  });
+}
+
+/* Command execution */
+async function runCommand(){
+  const input=document.getElementById('cmd-i');
+  const prompt=input.value.trim();
+  if(!prompt)return;
+  input.value='';
+
+  if(cmuxMode){
+    // Send to terminal via cmux
+    try{
+      const res=await postJson('/api/cmux-send',{prompt});
+      const data=await res.json();
+      if(data.ok){
+        appendOutput(`Sent to terminal: ${prompt}\n`,'done');
+      }else{
+        appendOutput(`Failed: ${data.error||data.message}\n`,'err');
+      }
+    }catch(e){
+      appendOutput(`Network error: ${e.message}\n`,'err');
+    }
+    return;
+  }
+
+  // Fallback: Agent SDK execution
+  if(agentBusy)return;
+  const out=document.getElementById('out');
+  out.innerHTML='';
+  out.classList.add('show');
+
+  try{
+    const res=await postJson('/api/run',{prompt});
+    if(!res.ok){
+      const err=await res.json();
+      appendOutput(`Error: ${err.error}\n`,'err');
+    }
+  }catch(e){
+    appendOutput(`Network error: ${e.message}\n`,'err');
+  }
+}
+
+function appendOutput(text,cls){
+  const out=document.getElementById('out');
+  const el=document.createElement('span');
+  el.className='chunk'+(cls?' '+cls:'');
+  el.textContent=text;
+  out.appendChild(el);
+  out.scrollTop=out.scrollHeight;
+}
+
+document.getElementById('cmd-i').addEventListener('keydown',e=>{
+  if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing)runCommand();
+});
+
+/* Event log with filtering */
+let eventFilter='all'; // 'all' | 'session' | 'pilot'
+let currentSessionId=null; // Captured from first Hook event
+
+function setEventFilter(f){
+  eventFilter=f;
+  document.querySelectorAll('.lg-h .filter-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('filter-'+f).classList.add('active');
+  // Re-filter existing rows
+  document.querySelectorAll('#ls .lr').forEach(r=>{
+    const sid=r.dataset.sid||'';
+    r.style.display=shouldShowEvent(sid)?'':'none';
+  });
+}
+
+function shouldShowEvent(sessionId){
+  if(eventFilter==='all')return true;
+  if(eventFilter==='session')return sessionId===currentSessionId||sessionId==='default';
+  if(eventFilter==='pilot')return sessionId==='default'||!sessionId;
+  return true;
+}
+
+function addRow(ev,sessionId){
+  // Track the first non-default session as "current session"
+  if(!currentSessionId&&sessionId&&sessionId!=='default'){
+    currentSessionId=sessionId;
+  }
+  const ls=document.getElementById('ls');
+  const r=document.createElement('div');r.className='lr';
+  r.dataset.sid=sessionId||'';
+  if(!shouldShowEvent(sessionId))r.style.display='none';
+  const t=new Date(ev.ts).toTimeString().slice(0,8);
+  let hkCls='';
+  if(ev.hookEvent==='Run')hkCls='run';
+  else if(ev.hookEvent==='Error')hkCls='err';
+  else if(ev.hookEvent==='Done')hkCls='done';
+  else if(ev.hookEvent==='PRD')hkCls='prd';
+  else if(['Read','Write','Edit','Bash','Glob','Grep'].includes(ev.hookEvent))hkCls='tool';
+  else if(['PreToolUse','PostToolUse','SessionStart','Stop'].includes(ev.hookEvent))hkCls='tool';
+  r.innerHTML=`<span class="ts">${t}</span><span class="hk ${hkCls}">${h(ev.hookEvent||'')}</span><span class="mg">${h(ev.summary||'')}</span>`;
+  ls.insertBefore(r,ls.firstChild);
+  ec++;document.getElementById('lc').textContent=ec;
+  while(ls.children.length>250)ls.removeChild(ls.lastChild);
+}
+
+/* SSE */
+let sseRetryDelay=1000;
+function connectSSE(){
+  const es=new EventSource('/api/sse');
+  es.onmessage=e=>{
+    try{
+      const d=JSON.parse(e.data);
+
+      if(d.type==='event') addRow(d.event,d.sessionId);
+
+      if(d.type==='team_status'){
+        document.getElementById('team-badge').classList.toggle('show',d.running);
+        if(d.running) document.getElementById('team-badge').textContent=`TEAM ${(d.current||0)+1}/${d.total||0}`;
+      }
+
+      if(d.type==='autopilot_status'){autopilotState=d;updateAutopilotUI(d)}
+
+      if(d.type==='live_activity'){
+        // Token estimate in header could be shown
+      }
+
+      if(d.type==='step_update'){
+        const newKey=JSON.stringify(d.statuses)+(d.gates?JSON.stringify(d.gates):'');
+        if(newKey!==prevStsKey){
+          prevStsKey=newKey;
+          sts=d.statuses;
+          if(d.gates)gts=d.gates;
+          if(d.substepStatuses)substepSts=d.substepStatuses;
+          if(d.suggestions)currentSuggestions=d.suggestions;
+          renderUI();
+          if(d.currentStepId&&d.currentStepId!==selStep)openSp(d.currentStepId);
+        }
+      }
+
+      if(d.type==='workflow'){
+        W=d.workflow;
+        renderUI();
+      }
+
+      if(d.type==='prd_selected'){
+        activePrd=d.prdId;
+        prevStsKey='';
+        document.getElementById('prd-select').value=d.prdId||'';
+        if(d.statuses){
+          sts=d.statuses;
+          gts=d.gates||{};
+          if(d.substepStatuses)substepSts=d.substepStatuses;
+          if(d.suggestions)currentSuggestions=d.suggestions;
+          updatePrdDisplay(d);
+          renderUI();
+        }
+      }
+
+      if(d.type==='agent_status'){
+        agentBusy=d.running;
+        document.getElementById('beacon').classList.toggle('busy',d.running);
+        document.getElementById('agent-badge').classList.toggle('show',d.running);
+        document.getElementById('cmd-i').disabled=d.running;
+        document.getElementById('cmd-b').disabled=d.running;
+      }
+
+      if(d.type==='agent_text') appendOutput(d.text+'\n');
+      if(d.type==='agent_tool') appendOutput(`[${d.tool}] ${d.summary}\n`,'tool');
+      if(d.type==='agent_result') appendOutput(`\n-- Done --\n`,'done');
+      if(d.type==='agent_error') appendOutput(`\nError: ${d.error}\n`,'err');
+    }catch(err){console.error(err)}
+  };
+  es.onopen=()=>{
+    sseRetryDelay=1000;
+    prevStsKey='';lastGlobalKey='';
+    loadPrds();
+  };
+  es.onerror=()=>{
+    es.close();
+    setTimeout(connectSSE,sseRetryDelay);
+    sseRetryDelay=Math.min(sseRetryDelay*2,30000);
+  };
+}
+
+function h(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+/* Command Palette */
+let paletteOpen=false,paletteItems=[],paletteIdx=-1;
+
+function buildPaletteItems(){
+  const items=[];
+  // Global skills
+  const g=W.global||{};
+  (g.categories||[]).forEach(cat=>{
+    (cat.skills||[]).forEach(s=>{
+      items.push({...s,phase:'Global: '+cat.name});
+    });
+  });
+  // Phase substeps + legacy skills
+  (W.steps||[]).forEach(step=>{
+    (step.substeps||[]).forEach(ss=>{
+      items.push({name:ss.name,desc:ss.desc||'',type:ss.type||'prompt',phase:step.label});
+    });
+    (step.skills||[]).forEach(s=>{
+      items.push({...s,phase:step.label});
+    });
+  });
+  return items;
+}
+
+function openPalette(){
+  paletteItems=buildPaletteItems();
+  paletteOpen=true;paletteIdx=-1;
+  document.getElementById('palette-overlay').classList.add('show');
+  const input=document.getElementById('palette-input');
+  input.value='';input.focus();
+  renderPaletteList('');
+}
+
+function closePalette(){
+  paletteOpen=false;
+  document.getElementById('palette-overlay').classList.remove('show');
+}
+
+function renderPaletteList(query){
+  const list=document.getElementById('palette-list');
+  const q=query.toLowerCase();
+  const filtered=q?paletteItems.filter(i=>
+    i.name.toLowerCase().includes(q)||
+    (i.desc||'').toLowerCase().includes(q)||
+    (i.phase||'').toLowerCase().includes(q)
+  ):paletteItems;
+  if(filtered.length===0){list.innerHTML='<div class="palette-empty">No matching skills</div>';return}
+  list.innerHTML='';
+  filtered.slice(0,15).forEach((item,i)=>{
+    const el=document.createElement('div');
+    el.className='palette-item'+(i===paletteIdx?' sel':'');
+    const badge=(item.type||'prompt')==='prompt'?'prompt':'bash';
+    el.innerHTML=`<span class="pi-badge">${badge}</span><span class="pi-name">${h(item.name)}</span><span class="pi-desc">${h(item.desc||'')}</span><span class="pi-phase">${h(item.phase||'')}</span>`;
+    el.onclick=()=>{closePalette();showSkillDetail(item,el,false)};
+    list.appendChild(el);
+  });
+}
+
+document.getElementById('palette-input').addEventListener('input',e=>renderPaletteList(e.target.value));
+document.getElementById('palette-input').addEventListener('keydown',e=>{
+  if(e.isComposing)return;
+  const items=document.querySelectorAll('#palette-list .palette-item');
+  if(e.key==='ArrowDown'){e.preventDefault();paletteIdx=Math.min(paletteIdx+1,items.length-1);items.forEach((el,i)=>el.classList.toggle('sel',i===paletteIdx))}
+  else if(e.key==='ArrowUp'){e.preventDefault();paletteIdx=Math.max(paletteIdx-1,0);items.forEach((el,i)=>el.classList.toggle('sel',i===paletteIdx))}
+  else if(e.key==='Enter'&&paletteIdx>=0&&items[paletteIdx]){items[paletteIdx].click()}
+  else if(e.key==='Escape'){closePalette()}
+});
+
+/* Config Panel */
+let cfgOpen=false,cfgData=null;
+
+function toggleConfig(){
+  cfgOpen=!cfgOpen;
+  document.getElementById('cfg-panel').classList.toggle('open',cfgOpen);
+  document.getElementById('cfg-toggle').style.borderColor=cfgOpen?'var(--bl)':'';
+  if(cfgOpen&&!cfgData)loadConfig();
+}
+
+async function loadConfig(){
+  try{
+    cfgData=await(await fetch('/api/claude-config')).json();
+    renderConfig();
+  }catch(e){console.error('loadConfig:',e)}
+}
+
+function renderConfig(){
+  if(!cfgData)return;
+  const panel=document.getElementById('cfg-panel');
+
+  let html=`<div class="cfg-tabs">
+    <button class="cfg-tab active" onclick="switchCfgTab('overview',this)">Overview</button>
+    <button class="cfg-tab" onclick="switchCfgTab('plugins',this)">Plugins</button>
+    <button class="cfg-tab" onclick="switchCfgTab('analytics',this)">Analytics</button>
+  </div>`;
+
+  // Tab: Overview
+  html+=`<div class="cfg-tab-content active" id="cfg-overview">`;
+  // Hooks
+  html+=`<div class="cfg-section"><div class="cfg-section-title">Hooks <span class="count">${Object.values(cfgData.hooks||{}).reduce((a,b)=>a+b,0)}</span></div>`;
+  for(const [event,count] of Object.entries(cfgData.hooks||{})){
+    html+=`<div class="cfg-item"><span class="ci-name">${h(event)}</span><span class="ci-val">${count}</span></div>`;
+  }
+  html+=`<button class="cfg-action" onclick="sendSkill('/hookify:hookify')">+ Create Hook</button></div>`;
+  // Agents
+  html+=`<div class="cfg-section"><div class="cfg-section-title">Subagents <span class="count">${(cfgData.agents||[]).length}</span></div>`;
+  (cfgData.agents||[]).forEach(a=>{
+    html+=`<div class="cfg-item"><span class="ci-name">${h(a.name)}</span></div>`;
+  });
+  html+=`</div>`;
+  // CLAUDE.md
+  html+=`<div class="cfg-section"><div class="cfg-section-title">CLAUDE.md</div>`;
+  (cfgData.claudeMd||[]).forEach(f=>{
+    html+=`<div class="cfg-item"><span class="ci-name">${h(f.path)}</span><span class="ci-val">${f.lines} lines</span></div>`;
+  });
+  html+=`<button class="cfg-action" onclick="sendSkill('/claude-md-management:claude-md-improver')">Audit</button>`;
+  html+=`<button class="cfg-action" onclick="sendSkill('/claude-code-setup:claude-automation-recommender')" style="margin-left:4px">Optimize</button></div>`;
+  // Unregistered
+  html+=`<div class="cfg-section" id="cfg-unregistered"></div>`;
+  html+=`</div>`;
+
+  // Tab: Plugins
+  html+=`<div class="cfg-tab-content" id="cfg-plugins">`;
+  html+=`<div class="cfg-section"><div class="cfg-section-title">Installed <span class="count">${(cfgData.plugins||[]).length}</span></div>`;
+  (cfgData.plugins||[]).forEach(p=>{
+    html+=`<div class="plugin-row"><span class="pl-name">${h(p.name.replace(/@.*$/,''))}</span><span class="pl-installed">enabled</span></div>`;
+  });
+  html+=`</div>`;
+  html+=`<div class="cfg-section"><div class="cfg-section-title">Marketplace</div>`;
+  html+=`<input class="plugin-filter" id="plugin-filter" placeholder="Search plugins..." oninput="filterPlugins(this.value)">`;
+  html+=`<div id="plugin-list">Loading...</div></div>`;
+  html+=`</div>`;
+
+  // Tab: Analytics
+  html+=`<div class="cfg-tab-content" id="cfg-analytics">`;
+  html+=`<div id="analytics-content">Loading...</div>`;
+  html+=`</div>`;
+
+  panel.innerHTML=html;
+  loadUnregisteredSkills();
+  loadPluginStore();
+  loadAnalytics();
+}
+
+function switchCfgTab(tabId,btn){
+  document.querySelectorAll('.cfg-tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.cfg-tab-content').forEach(c=>c.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('cfg-'+tabId).classList.add('active');
+}
+
+let pluginData=[];
+async function loadPluginStore(){
+  try{
+    const data=await(await fetch('/api/plugins/marketplace')).json();
+    pluginData=data.plugins||[];
+    renderPluginList(pluginData);
+  }catch(e){console.error('loadPluginStore:',e)}
+}
+
+function renderPluginList(plugins){
+  const el=document.getElementById('plugin-list');
+  if(!el)return;
+  if(plugins.length===0){el.innerHTML='<div class="cfg-item"><span class="ci-val">No plugins found</span></div>';return}
+  el.innerHTML=plugins.slice(0,20).map(p=>{
+    const badge=p.isAnthropic?'<span class="pl-cat" style="color:var(--gr);border-color:var(--grd)">Anthropic</span>':'';
+    const action=p.installed?'<span class="pl-installed">installed</span>':`<button class="pl-install-btn" onclick="installPlugin('${h(p.name)}')">Install</button>`;
+    return `<div class="plugin-row"><span class="pl-name">${h(p.name)}</span>${badge}<span class="pl-cat">${h(p.category)}</span>${action}</div>`;
+  }).join('')+(plugins.length>20?`<div class="cfg-item"><span class="ci-val">+${plugins.length-20} more</span></div>`:'');
+}
+
+function filterPlugins(q){
+  const filtered=q?pluginData.filter(p=>p.name.includes(q)||p.description.includes(q)||(p.category||'').includes(q)):pluginData;
+  renderPluginList(filtered);
+}
+
+async function installPlugin(name){
+  if(!confirm(`Install plugin "${name}"?`))return;
+  try{
+    const data=await(await postJson('/api/plugins/install',{name,scope:'project'})).json();
+    if(data.ok){alert('Installed. Restart session to activate.');loadConfig();}
+    else alert('Error: '+data.error);
+  }catch(e){alert('Error: '+e.message)}
+}
+
+async function loadAnalytics(){
+  try{
+    const data=await(await fetch('/api/analytics')).json();
+    const el=document.getElementById('analytics-content');
+    if(!el)return;
+    let html='';
+
+    // CLAUDE.md score
+    const score=data.claudeMd?.score||0;
+    const stars='*'.repeat(Math.round(score/20))+'_'.repeat(5-Math.round(score/20));
+    html+=`<div class="cfg-section"><div class="cfg-section-title">CLAUDE.md Quality</div>`;
+    html+=`<div class="score-bar"><span class="stars">${stars.replace(/\*/g,'&#9733;').replace(/_/g,'&#9734;')}</span><span class="ci-val">${score}/100</span></div>`;
+    html+=`<div class="progress-bar"><div class="fill" style="width:${score}%"></div></div>`;
+    (data.claudeMd?.issues||[]).forEach(i=>{html+=`<div class="cfg-item"><span class="ci-val">${h(i)}</span></div>`});
+    html+=`</div>`;
+
+    // PRD progress
+    html+=`<div class="cfg-section"><div class="cfg-section-title">PRD Progress <span class="count">${data.totalPrds}</span></div>`;
+    (data.prds||[]).slice(0,8).forEach(p=>{
+      html+=`<div class="cfg-item"><span class="ci-name">${h(p.id)}</span><span class="ci-val">${p.done}/${p.total} (${p.progress}%)</span></div>`;
+      html+=`<div class="progress-bar"><div class="fill" style="width:${p.progress}%"></div></div>`;
+    });
+    html+=`</div>`;
+
+    // Hook stats
+    const stats=data.hookStats||{};
+    if(Object.keys(stats).length>0){
+      html+=`<div class="cfg-section"><div class="cfg-section-title">Event Stats (this session)</div>`;
+      for(const [event,count] of Object.entries(stats).sort((a,b)=>b[1]-a[1])){
+        html+=`<div class="cfg-item"><span class="ci-name">${h(event)}</span><span class="ci-val">${count}</span></div>`;
+      }
+      html+=`</div>`;
+    }
+
+    el.innerHTML=html;
+  }catch(e){console.error('loadAnalytics:',e)}
+}
+
+async function loadUnregisteredSkills(){
+  try{
+    const data=await(await fetch('/api/scaffold')).json();
+    const container=document.getElementById('cfg-unregistered');
+    if(!container)return;
+    const items=data.unregistered||[];
+    if(items.length===0){
+      container.innerHTML=`<div class="cfg-section-title">Unregistered Skills <span class="count">0</span></div><div class="cfg-item"><span class="ci-val">All skills registered</span></div>`;
+      return;
+    }
+    let html=`<div class="cfg-section-title">Unregistered Skills <span class="count">${items.length}</span></div>`;
+    html+=`<div style="font-size:9px;color:var(--txd);margin-bottom:6px">.claude/ にあるが workflow.yml に未登録のスキル</div>`;
+    items.slice(0,10).forEach(s=>{
+      html+=`<div class="cfg-item"><span class="ci-name">${h(s.name)}</span><span class="ci-val" style="font-size:8px">${h(s.suggestedPhase)}</span></div>`;
+    });
+    if(items.length>10) html+=`<div class="cfg-item"><span class="ci-val">... +${items.length-10} more</span></div>`;
+    html+=`<button class="cfg-action" onclick="sendSkill('workflow.ymlにスキルを追加・整理して')">workflow.yml に追加</button>`;
+    container.innerHTML=html;
+  }catch(e){console.error('loadUnregistered:',e)}
+}
+
+function sendSkill(name){
+  document.getElementById('cmd-i').value=name;
+  runCommand();
+}
+
+async function runTeam(teamId,label,desc){
+  if(!confirm(`Team "${label}" を実行しますか?\n${desc||''}`))return;
+  try{
+    const res=await postJson('/api/team/run',{teamId});
+    const data=await res.json();
+    if(data.ok){
+      appendOutput(`Team started: ${label}\n`,'done');
+    }else{
+      appendOutput(`Team error: ${data.error}\n`,'err');
+    }
+  }catch(e){
+    appendOutput(`Network error: ${e.message}\n`,'err');
+  }
+}
+
+/* Autopilot controls */
+async function startAutopilot(){
+  if(!activePrd){alert('PRDを選択してください');return}
+  if(!confirm(`Autopilot を開始しますか?\nPRD: ${activePrd}\n\n全フェーズの substeps を自動実行します。`))return;
+  try{
+    const res=await postJson('/api/autopilot/start',{});
+    const data=await res.json();
+    if(!data.ok)alert(data.error);
+  }catch(e){alert(e.message)}
+}
+async function pauseAutopilot(){
+  await postJson('/api/autopilot/pause',{});
+}
+async function stopAutopilot(){
+  if(!confirm('Autopilot を停止しますか?'))return;
+  await postJson('/api/autopilot/stop',{});
+}
+
+function updateAutopilotUI(status){
+  const bar=document.getElementById('autopilot-bar');
+  const statusEl=document.getElementById('ap-status');
+  const startBtn=document.getElementById('ap-start');
+  const pauseBtn=document.getElementById('ap-pause');
+  const stopBtn=document.getElementById('ap-stop');
+
+  if(activePrd) bar.classList.add('show');
+  else bar.classList.remove('show');
+
+  if(status.running){
+    startBtn.style.display='none';
+    pauseBtn.style.display='';
+    stopBtn.style.display='';
+    pauseBtn.textContent=status.paused?'Resume':'Pause';
+    const step=W.steps?.find(s=>s.id===status.currentStep);
+    const ss=step?.substeps?.find(s=>s.id===status.currentSubstep);
+    statusEl.textContent=status.paused?'Paused':`Running: ${step?.label||''} > ${ss?.name||''}`;
+  }else{
+    startBtn.style.display='';
+    pauseBtn.style.display='none';
+    stopBtn.style.display='none';
+    statusEl.textContent='Ready';
+  }
+}
+
+/* Prompt Library */
+function openPromptDialog(defaultText){
+  document.getElementById('prompt-dialog').classList.add('show');
+  document.getElementById('prompt-text').value=defaultText||'';
+  document.getElementById('prompt-name').value='';
+  document.getElementById('prompt-desc').value='';
+  document.getElementById('prompt-tags').value='';
+  document.getElementById('prompt-name').focus();
+}
+function closePromptDialog(){
+  document.getElementById('prompt-dialog').classList.remove('show');
+}
+async function savePrompt(){
+  const name=document.getElementById('prompt-name').value.trim();
+  const prompt=document.getElementById('prompt-text').value.trim();
+  const description=document.getElementById('prompt-desc').value.trim();
+  const tags=document.getElementById('prompt-tags').value.split(',').map(t=>t.trim()).filter(Boolean);
+  if(!name||!prompt){alert('Name and prompt are required');return}
+  try{
+    const res=await postJson('/api/prompts/save',{name,prompt,description,tags});
+    const data=await res.json();
+    if(data.ok){closePromptDialog();alert('Saved!')}
+    else alert(data.error);
+  }catch(e){alert(e.message)}
+}
+
+/* Keyboard shortcuts */
+document.addEventListener('keydown',e=>{
+  if((e.ctrlKey||e.metaKey)&&e.key==='k'){e.preventDefault();paletteOpen?closePalette():openPalette()}
+  if(e.key==='Escape'){
+    if(paletteOpen)closePalette();
+    else{closeSp();closeSkillDetail()}
+  }
+});
+init();
+</script>
+</body>
+</html>
