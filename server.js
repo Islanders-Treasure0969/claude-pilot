@@ -950,10 +950,11 @@ app.get("/api/plugins/marketplace", async (_r, res) => {
     const manifest = JSON.parse(content);
     const plugins = (manifest.plugins || []).map(p => ({
       name: p.name,
-      description: (p.description || "").slice(0, 120),
+      description: (p.description || "").slice(0, 200),
       category: p.category || "other",
-      author: p.author?.name || "unknown",
+      author: p.author?.name || "community",
       isAnthropic: p.author?.name === "Anthropic",
+      homepage: p.homepage || "",
     }));
     // Get installed plugins
     const settingsPath = path.join(PROJECT_DIR, ".claude", "settings.json");

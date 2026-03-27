@@ -780,11 +780,15 @@ function renderPluginList(plugins){
   const el=document.getElementById('plugin-list');
   if(!el)return;
   if(plugins.length===0){el.innerHTML='<div class="cfg-item"><span class="ci-val">No plugins found</span></div>';return}
-  el.innerHTML=plugins.slice(0,20).map(p=>{
-    const badge=p.isAnthropic?'<span class="pl-cat" style="color:var(--gr);border-color:var(--grd)">Anthropic</span>':'';
+  el.innerHTML=plugins.slice(0,30).map(p=>{
+    const badge=p.isAnthropic?'<span class="pl-cat" style="color:var(--gn);border-color:var(--gn)">Official</span>':'';
     const action=p.installed?'<span class="pl-installed">installed</span>':`<button class="pl-install-btn" onclick="installPlugin('${h(p.name)}')">Install</button>`;
-    return `<div class="plugin-row"><span class="pl-name">${h(p.name)}</span>${badge}<span class="pl-cat">${h(p.category)}</span>${action}</div>`;
-  }).join('')+(plugins.length>20?`<div class="cfg-item"><span class="ci-val">+${plugins.length-20} more</span></div>`:'');
+    const hp=p.homepage?`<a href="${h(p.homepage)}" target="_blank" style="color:var(--bl);font-size:10px">GitHub</a>`:'';
+    return `<div class="plugin-row" title="${h(p.description)}">
+      <span class="pl-name">${h(p.name)}</span>${badge}<span class="pl-cat">${h(p.category)}</span>${hp}${action}
+      <div style="width:100%;font-size:10px;color:var(--txd);margin-top:2px;line-height:1.3">${h(p.description)} ${p.author!=='community'?'— by '+h(p.author):''}</div>
+    </div>`;
+  }).join('')+(plugins.length>30?`<div class="cfg-item"><span class="ci-val">+${plugins.length-30} more</span></div>`:'');
 }
 
 function filterPlugins(q){
