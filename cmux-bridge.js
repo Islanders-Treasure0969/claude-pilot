@@ -48,22 +48,24 @@ export class CmuxBridge {
 
   _startHeartbeat() {
     this._heartbeatTimer = setInterval(async () => {
+      if (!this.workspaceId) return;
       try {
         await this._rawExec(["ping"]);
-        if (!this.available && this.workspaceId) {
+        if (!this.available) {
           this.available = true;
           await this.refreshClaudeSurfaces();
           console.log("  cmux: connection recovered");
         }
       } catch {
-        if (this.available) {
-          console.warn("  cmux: heartbeat failed, attempting socket re-discovery...");
-          const recovered = await this._rediscoverSocket();
-          if (!recovered) this.available = false;
+        // Always try to re-discover, regardless of current available state
+        const recovered = await this._rediscoverSocket();
+        if (!recovered && this.available) {
+          console.warn("  cmux: heartbeat failed, marking unavailable");
+          this.available = false;
         }
       }
     }, HEARTBEAT_INTERVAL);
-    this._heartbeatTimer.unref(); // Don't prevent process exit
+    this._heartbeatTimer.unref();
   }
 
   stopHeartbeat() {

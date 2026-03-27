@@ -443,7 +443,16 @@ function debouncedPrdRefresh(sessionId = "default") {
 // cmux integration
 app.get("/api/cmux-context", async (_r, res) => {
   await cmux.ready;
-  if (cmux.available) await cmux.refreshClaudeSurfaces();
+  // Re-check availability on every context request (browser init depends on this)
+  if (cmux.workspaceId) {
+    try {
+      await cmux._rawExec(["ping"]);
+      cmux.available = true;
+      await cmux.refreshClaudeSurfaces();
+    } catch {
+      // Don't mark unavailable here — heartbeat handles that
+    }
+  }
   res.json(cmux.getContext());
 });
 
