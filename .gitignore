@@ -1,5 +1,25 @@
 node_modules/
 .local/
 *.log
+*.pid
 .DS_Store
 .env
+.env.local
+
+# IDE
+.idea/
+.vscode/
+
+# Claude settings (may contain API keys)
+.claude/settings.local.json
+.claude-pilot/prompts/
+.claude-pilot/config.local.yml
+
+# Build artifacts
+dist/
+build/
+.tmp/
+
+# Playwright
+test-results/
+playwright-report/

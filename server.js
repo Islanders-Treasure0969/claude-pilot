@@ -31,6 +31,17 @@ const PRD_ROOT = path.resolve(PROJECT_DIR, getArg("prd-root", process.env.CLAUDE
 const STATE_DIR = path.resolve(PROJECT_DIR, getArg("state-dir", process.env.CLAUDE_PILOT_STATE_DIR || ".local/claude_pilot/state"));
 
 app.use(express.json({ limit: "512kb" }));
+
+// Security headers
+app.use((_req, res, next) => {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "DENY");
+  res.setHeader("X-XSS-Protection", "1; mode=block");
+  res.setHeader("Referrer-Policy", "no-referrer");
+  res.setHeader("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';");
+  next();
+});
+
 app.use(express.static(path.join(__dirname, "public")));
 
 if (!fs.existsSync(STATE_DIR)) fs.mkdirSync(STATE_DIR, { recursive: true });
@@ -625,8 +636,11 @@ app.post("/api/prd/select", (req, res) => {
   res.json({ ok: true, activePrdId });
 });
 
+const VALID_PRD_ID = /^[a-zA-Z0-9._-]+$/;
+
 app.get("/api/prd/:id/status", (req, res) => {
   const prdId = req.params.id;
+  if (!VALID_PRD_ID.test(prdId)) return res.status(400).json({ error: "Invalid PRD ID format" });
   if (!discoverPrds().includes(prdId)) {
     return res.status(404).json({ error: "PRD not found" });
   }
@@ -933,12 +947,17 @@ app.get("/api/plugins/marketplace", async (_r, res) => {
   }
 });
 
+const VALID_PLUGIN_NAME = /^[a-zA-Z0-9_-]+$/;
+const VALID_SCOPES = ["project", "user", "local"];
+
 app.post("/api/plugins/install", async (req, res) => {
-  const { name, scope } = req.body;
+  const { name } = req.body;
+  const scope = VALID_SCOPES.includes(req.body.scope) ? req.body.scope : "project";
   if (!name) return res.status(400).json({ error: "name required" });
+  if (!VALID_PLUGIN_NAME.test(name)) return res.status(400).json({ error: "Invalid plugin name" });
   try {
     const result = await new Promise((resolve, reject) => {
-      execFile("claude", ["plugin", "install", name, "--scope", scope || "project"], { timeout: 30000 }, (err, stdout, stderr) => {
+      execFile("claude", ["plugin", "install", name, "--scope", scope], { timeout: 30000 }, (err, stdout, stderr) => {
         if (err) reject(new Error(stderr || err.message));
         else resolve(stdout);
       });
@@ -948,16 +967,19 @@ app.post("/api/plugins/install", async (req, res) => {
     const sync = syncWorkflowSkills();
     res.json({ ok: true, message: result.trim(), sync });
   } catch (e) {
-    res.json({ ok: false, error: e.message });
+    console.error("Plugin install error:", e.message);
+    res.status(500).json({ ok: false, error: "Plugin installation failed" });
   }
 });
 
 app.post("/api/plugins/uninstall", async (req, res) => {
-  const { name, scope } = req.body;
+  const { name } = req.body;
+  const scope = VALID_SCOPES.includes(req.body.scope) ? req.body.scope : "project";
   if (!name) return res.status(400).json({ error: "name required" });
+  if (!VALID_PLUGIN_NAME.test(name)) return res.status(400).json({ error: "Invalid plugin name" });
   try {
     const result = await new Promise((resolve, reject) => {
-      execFile("claude", ["plugin", "uninstall", name, "--scope", scope || "project"], { timeout: 30000 }, (err, stdout, stderr) => {
+      execFile("claude", ["plugin", "uninstall", name, "--scope", scope], { timeout: 30000 }, (err, stdout, stderr) => {
         if (err) reject(new Error(stderr || err.message));
         else resolve(stdout);
       });
@@ -967,7 +989,8 @@ app.post("/api/plugins/uninstall", async (req, res) => {
     const sync = syncWorkflowSkills();
     res.json({ ok: true, message: result.trim(), sync });
   } catch (e) {
-    res.json({ ok: false, error: e.message });
+    console.error("Plugin uninstall error:", e.message);
+    res.status(500).json({ ok: false, error: "Plugin uninstallation failed" });
   }
 });
 

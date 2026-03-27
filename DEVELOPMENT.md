@@ -2,7 +2,7 @@
 
 ## 現在のバージョン: v0.4.0
 
-初期コミット済み。`/Users/iwashita/開発/ai_agent/ib/pj/claude-pilot/`
+初期コミット済み。
 
 ---
 
