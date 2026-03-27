@@ -223,12 +223,15 @@ body{font-family:var(--m);background:var(--bg);color:var(--tx);height:100vh;disp
 .score-bar .stars{color:var(--or);font-size:12px;letter-spacing:2px}
 
 /* Plugin store */
-.plugin-row{display:flex;align-items:center;gap:8px;padding:4px 0;font-size:10px}
-.plugin-row .pl-name{color:var(--bl);font-family:var(--m);min-width:100px}
-.plugin-row .pl-cat{font-size:8px;color:var(--txd);padding:1px 5px;border:1px solid var(--bd);border-radius:var(--radius)}
-.plugin-row .pl-installed{color:var(--gr);font-size:8px}
-.plugin-row .pl-install-btn{font-family:var(--m);font-size:8px;padding:2px 8px;border-radius:var(--radius);border:1px solid var(--bl);color:var(--bl);background:none;cursor:pointer;transition:all .12s}
+.plugin-row{display:flex;align-items:center;gap:6px;padding:5px 0;font-size:10px;border-bottom:1px solid var(--s2)}
+.plugin-row .pl-name{color:var(--bl);font-family:var(--m);white-space:nowrap;flex-shrink:0}
+.plugin-row .pl-desc{color:var(--txd);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:9px}
+.plugin-row .pl-cat{font-size:8px;color:var(--txd);padding:1px 5px;border:1px solid var(--bd);border-radius:var(--radius);white-space:nowrap;flex-shrink:0}
+.plugin-row .pl-installed{color:var(--gr);font-size:8px;white-space:nowrap;flex-shrink:0}
+.plugin-row .pl-install-btn{font-family:var(--m);font-size:8px;padding:2px 8px;border-radius:var(--radius);border:1px solid var(--bl);color:var(--bl);background:none;cursor:pointer;transition:all .12s;white-space:nowrap;flex-shrink:0}
 .plugin-row .pl-install-btn:hover{background:var(--blb)}
+.plugin-row .pl-link{color:var(--txd);font-size:8px;white-space:nowrap;flex-shrink:0}
+.plugin-row .pl-link:hover{color:var(--bl)}
 .plugin-filter{font-family:var(--m);font-size:10px;width:100%;background:var(--bg);color:var(--txb);border:1px solid var(--bd);border-radius:var(--radius);padding:6px 10px;margin-bottom:8px;outline:none}
 .plugin-filter:focus{border-color:var(--bl)}
 
