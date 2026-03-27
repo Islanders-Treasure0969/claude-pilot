@@ -46,9 +46,11 @@ body{font-family:var(--m);background:var(--bg);color:var(--tx);height:100vh;disp
 .gb-panel{position:absolute;top:100%;left:0;right:0;z-index:50;background:var(--s2);border-bottom:1px solid var(--bd);padding:0;max-height:0;overflow:hidden;transition:max-height .2s ease,padding .2s ease}
 .gb-panel.open{max-height:60vh;padding:12px var(--pad);overflow-y:auto}
 .gb-panel .gb-grid{display:flex;flex-wrap:wrap;gap:6px}
-.gb-panel .gsk{font-family:var(--m);font-size:10px;padding:5px 12px;border-radius:var(--radius);border:1px solid var(--bd);background:var(--s1);color:var(--cy);cursor:pointer;transition:all .12s;white-space:nowrap;display:flex;align-items:center;gap:6px}
+.gb-panel .gsk{font-family:var(--m);font-size:10px;padding:8px 12px;border-radius:var(--radius);border:1px solid var(--bd);background:var(--s1);color:var(--cy);cursor:pointer;transition:all .12s;display:flex;align-items:baseline;gap:6px;min-width:180px;flex-direction:row;flex-wrap:wrap}
 .gb-panel .gsk:hover{border-color:var(--cy);background:rgba(86,212,221,.07)}
-.gb-panel .gsk .badge{font-size:7px;text-transform:uppercase;padding:1px 4px;border-radius:3px;background:rgba(255,255,255,.06);color:var(--txd);letter-spacing:.5px}
+.gb-panel .gsk .badge{font-size:7px;text-transform:uppercase;padding:1px 4px;border-radius:3px;background:rgba(255,255,255,.06);color:var(--txd);letter-spacing:.5px;flex-shrink:0}
+.gb-panel .gsk .sk-name{color:var(--cy);white-space:nowrap}
+.gb-panel .gsk .sk-desc{font-size:9px;color:var(--txd);width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .gb-panel .gb-cat{font-size:9px;text-transform:uppercase;letter-spacing:1.2px;color:var(--txd);padding:8px 0 3px;width:100%;border-top:1px solid var(--bd);margin-top:6px;font-weight:500}
 .gb-panel .gb-cat:first-child{border-top:none;margin-top:0}
 
@@ -232,6 +234,7 @@ body{font-family:var(--m);background:var(--bg);color:var(--tx);height:100vh;disp
 .plugin-row .pl-install-btn:hover{background:var(--blb)}
 .plugin-row .pl-link{color:var(--txd);font-size:8px;white-space:nowrap;flex-shrink:0}
 .plugin-row .pl-link:hover{color:var(--bl)}
+.cfg-guide{font-size:10px;color:var(--or);background:rgba(210,153,34,.08);border:1px solid rgba(210,153,34,.2);border-radius:var(--radius);padding:8px 10px;margin:4px 0 8px;line-height:1.5}
 .plugin-filter{font-family:var(--m);font-size:10px;width:100%;background:var(--bg);color:var(--txb);border:1px solid var(--bd);border-radius:var(--radius);padding:6px 10px;margin-bottom:8px;outline:none}
 .plugin-filter:focus{border-color:var(--bl)}
 

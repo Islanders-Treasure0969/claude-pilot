@@ -204,14 +204,51 @@ function resolveSuggestions(statuses, gateDetails) {
   const steps = workflow.steps || [];
   let activeStep = steps.find(s => statuses[s.id] === "active");
   if (!activeStep) activeStep = steps.find(s => statuses[s.id] === "pending");
-  if (!activeStep) return [];
+  if (!activeStep) {
+    // All done
+    if (Object.values(statuses).every(v => v === "done")) {
+      return [{ name: "All phases complete!", desc: "Consider creating a PR or starting a new PRD", type: "info" }];
+    }
+    return [];
+  }
 
-  // Prefer substeps over skills
-  const substeps = activeStep.substeps || [];
-  if (substeps.length > 0) return substeps.slice(0, 2).map(ss => ({ name: ss.name, desc: ss.desc, type: ss.type }));
+  // Smart suggestions based on gate details
+  const details = gateDetails[activeStep.id] || [];
+  const suggestions = [];
 
-  const skills = activeStep.skills || [];
-  return skills.slice(0, 2);
+  for (const detail of details) {
+    if (!detail || detail.state === "complete" || detail.state === "skipped") continue;
+
+    if (detail.state === "blocked") {
+      const blockers = (detail.blockedBy || []).map(id => {
+        const s = steps.find(st => st.id === id);
+        return s ? s.label : id;
+      });
+      suggestions.push({ name: `Blocked by: ${blockers.join(", ")}`, desc: "Complete the prerequisite phases first", type: "info" });
+    } else if (detail.state === "file_missing") {
+      suggestions.push({ name: `Create the required file to proceed`, desc: "Check the gate rule for the expected file name", type: "prompt" });
+    } else if (detail.state === "precursor_missing") {
+      suggestions.push({ name: `Set up the prerequisite file first`, desc: "The precursor file hasn't been created yet", type: "prompt" });
+    } else if (detail.state === "incomplete" && detail.total > 0) {
+      const remaining = (detail.unchecked || detail.total - (detail.checked || detail.done || 0));
+      suggestions.push({ name: `${detail.checked || detail.done || 0}/${detail.total} done — ${remaining} remaining`, desc: "Complete the remaining checklist items", type: "prompt" });
+      if (detail.pending && Array.isArray(detail.pending)) {
+        suggestions.push({ name: `Pending: ${detail.pending.slice(0, 3).join(", ")}`, desc: "These items need attention", type: "info" });
+      }
+    } else if (detail.state === "incomplete") {
+      suggestions.push({ name: `Update the gate file to proceed`, desc: "The gate condition is not yet satisfied", type: "prompt" });
+    }
+  }
+
+  // If no gate-based suggestions, fall back to substeps
+  if (suggestions.length === 0) {
+    const substeps = activeStep.substeps || [];
+    if (substeps.length > 0) return substeps.slice(0, 2).map(ss => ({ name: ss.name, desc: ss.desc, type: ss.type }));
+    const skills = activeStep.skills || [];
+    return skills.slice(0, 2);
+  }
+
+  return suggestions.slice(0, 3);
 }
 
 function getPrdSummary(prdId) {
@@ -1117,32 +1154,75 @@ app.post("/api/team/run", async (req, res) => {
 
   res.json({ ok: true, message: `Team ${team.label} started`, skills });
 
-  // Execute skills sequentially via cmux send
+  // Execute skills via cmux send or Agent SDK
+  const mode = team.mode || "sequential";
+
   if (cmux.available) {
-    for (let i = 0; i < skills.length; i++) {
-      teamQueue.current.index = i;
-      broadcast({ type: "team_status", running: true, teamId, label: team.label, total: skills.length, current: i });
-      addEvent("default", "Team", `[${i + 1}/${skills.length}] ${skills[i]}`);
+    if (mode === "parallel") {
+      // Parallel: send all skills simultaneously, don't wait between them
+      const results = await Promise.all(skills.map(async (skill, i) => {
+        broadcast({ type: "team_status", running: true, teamId, label: team.label, total: skills.length, current: i, mode: "parallel" });
+        addEvent("default", "Team", `[parallel] ${skill}`);
+        return cmux.sendToClaudeCode(skill);
+      }));
+      const failed = results.filter(r => !r).length;
+      if (failed > 0) addEvent("default", "Team", `${failed}/${skills.length} failed to send`);
+    } else {
+      // Sequential: send one by one, wait for Stop hook
+      for (let i = 0; i < skills.length; i++) {
+        teamQueue.current.index = i;
+        broadcast({ type: "team_status", running: true, teamId, label: team.label, total: skills.length, current: i, mode: "sequential" });
+        addEvent("default", "Team", `[${i + 1}/${skills.length}] ${skills[i]}`);
 
-      const sent = await cmux.sendToClaudeCode(skills[i]);
-      if (!sent) {
-        addEvent("default", "Team", `Failed to send: ${skills[i]}`);
-        break;
-      }
+        const sent = await cmux.sendToClaudeCode(skills[i]);
+        if (!sent) {
+          addEvent("default", "Team", `Failed to send: ${skills[i]}`);
+          break;
+        }
 
-      // Wait for the skill to complete (Stop hook or timeout)
-      if (i < skills.length - 1 && team.mode === "sequential") {
-        await new Promise(resolve => {
-          const timeout = setTimeout(() => {
-            clearStopListener("team");
-            resolve();
-          }, 120000); // 2 min max per skill
-          setStopListener("team", () => {
-            clearTimeout(timeout);
-            clearStopListener("team");
-            setTimeout(resolve, 1000); // small delay between skills
+        // Wait for the skill to complete (Stop hook or timeout)
+        if (i < skills.length - 1) {
+          await new Promise(resolve => {
+            const timeout = setTimeout(() => {
+              clearStopListener("team");
+              resolve();
+            }, 120000); // 2 min max per skill
+            setStopListener("team", () => {
+              clearTimeout(timeout);
+              clearStopListener("team");
+              setTimeout(resolve, 1000);
+            });
           });
-        });
+        }
+      }
+    }
+  } else {
+    // Fallback: Agent SDK parallel execution
+    addEvent("default", "Team", `Running via Agent SDK (${mode})`);
+    if (mode === "parallel") {
+      const agentPromises = skills.map(async (skill, i) => {
+        broadcast({ type: "team_status", running: true, teamId, label: team.label, total: skills.length, current: i, mode: "parallel" });
+        try {
+          for await (const msg of query({ prompt: skill, options: { cwd: PROJECT_DIR, maxTurns: 15 } })) {
+            if (msg.type === "assistant" && msg.message?.content) {
+              const text = msg.message.content.filter(c => c.type === "text").map(c => c.text).join("");
+              if (text) broadcast({ type: "agent_text", text: `[${skill}] ${text.slice(0, 200)}` });
+            }
+          }
+          return { skill, ok: true };
+        } catch (e) { return { skill, ok: false, error: e.message }; }
+      });
+      await Promise.all(agentPromises);
+    } else {
+      for (const skill of skills) {
+        try {
+          for await (const msg of query({ prompt: skill, options: { cwd: PROJECT_DIR, maxTurns: 15 } })) {
+            if (msg.type === "assistant" && msg.message?.content) {
+              const text = msg.message.content.filter(c => c.type === "text").map(c => c.text).join("");
+              if (text) broadcast({ type: "agent_text", text: `[${skill}] ${text.slice(0, 200)}` });
+            }
+          }
+        } catch (e) { addEvent("default", "Team", `Error: ${skill}: ${e.message}`); }
       }
     }
   }
@@ -1153,6 +1233,47 @@ app.post("/api/team/run", async (req, res) => {
   addEvent("default", "Team", `Completed: ${team.label}`);
   broadcast({ type: "team_status", running: false, teamId });
   if (cmux.available) cmux.log("success", "pilot", `Team done: ${team.label}`);
+});
+
+// ── /batch command: ad-hoc parallel execution ───
+
+app.post("/api/batch", async (req, res) => {
+  const { skills, mode } = req.body;
+  if (!skills || !Array.isArray(skills) || skills.length === 0) {
+    return res.status(400).json({ error: "skills array required" });
+  }
+  if (teamQueue.running) return res.status(409).json({ error: "A team is already running" });
+  if (autopilot.running) return res.status(409).json({ error: "Autopilot is running" });
+
+  const batchMode = mode === "sequential" ? "sequential" : "parallel";
+
+  teamQueue.running = true;
+  teamQueue.current = { teamId: "_batch", skills, index: 0, mode: batchMode };
+  addEvent("default", "Batch", `Started: ${skills.length} skills (${batchMode})`);
+  broadcast({ type: "team_status", running: true, teamId: "_batch", label: "Batch", total: skills.length, current: 0, mode: batchMode });
+  res.json({ ok: true, message: `Batch started (${batchMode})`, skills });
+
+  if (cmux.available) {
+    if (batchMode === "parallel") {
+      await Promise.all(skills.map(s => cmux.sendToClaudeCode(s)));
+    } else {
+      for (let i = 0; i < skills.length; i++) {
+        await cmux.sendToClaudeCode(skills[i]);
+        if (i < skills.length - 1) {
+          await new Promise(resolve => {
+            const timeout = setTimeout(() => { clearStopListener("team"); resolve(); }, 120000);
+            setStopListener("team", () => { clearTimeout(timeout); clearStopListener("team"); setTimeout(resolve, 1000); });
+          });
+        }
+      }
+    }
+  }
+
+  teamQueue.running = false;
+  teamQueue.current = null;
+  clearStopListener("team");
+  addEvent("default", "Batch", "Completed");
+  broadcast({ type: "team_status", running: false, teamId: "_batch" });
 });
 
 // ── Step control ────────────────────────────────

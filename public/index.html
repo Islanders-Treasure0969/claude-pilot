@@ -113,10 +113,11 @@ function renderUI(){renderGlobal();renderPipe();renderCtrl();renderSuggestions()
 let autopilotState={running:false,paused:false};
 
 function createSkillChip(skill,cssClass){
-  const el=document.createElement(cssClass==='gsk'?'span':'div');
+  const el=document.createElement('div');
   el.className=cssClass;
   const badge=skill.type==='prompt'?'prompt':'bash';
-  el.innerHTML=`<span class="badge">${badge}</span>${h(skill.name)}`;
+  const shortName=skill.name.replace(/^\/|^use subagent /,'');
+  el.innerHTML=`<span class="badge">${badge}</span><span class="sk-name">${h(shortName)}</span>${skill.desc?`<span class="sk-desc">${h(skill.desc.slice(0,50))}</span>`:''}`;
   el.onclick=(e)=>showSkillDetail(skill,e,false);
   attachSkillHover(el,skill);
   return el;
@@ -437,6 +438,20 @@ async function runCommand(){
   if(!prompt)return;
   input.value='';
 
+  // Handle /batch command: /batch /skill1 /skill2 /skill3
+  if(prompt.startsWith('/batch ')){
+    const parts=prompt.slice(7).trim().split(/\s+/);
+    if(parts.length===0){appendOutput('Usage: /batch /skill1 /skill2 ...\n','err');return}
+    appendOutput(`> Batch: ${parts.join(', ')}\n`,'tool');
+    try{
+      const res=await postJson('/api/batch',{skills:parts,mode:'parallel'});
+      const data=await res.json();
+      if(data.ok) appendOutput(`Batch started (${parts.length} skills)\n`,'done');
+      else appendOutput(`Batch error: ${data.error}\n`,'err');
+    }catch(e){appendOutput(`Network error: ${e.message}\n`,'err')}
+    return;
+  }
+
   if(cmuxMode){
     // Send to terminal via cmux
     try{
@@ -707,19 +722,33 @@ function renderConfig(){
   // Tab: Overview
   html+=`<div class="cfg-tab-content active" id="cfg-overview">`;
   // Hooks
-  html+=`<div class="cfg-section"><div class="cfg-section-title">Hooks <span class="count">${Object.values(cfgData.hooks||{}).reduce((a,b)=>a+b,0)}</span></div>`;
-  for(const [event,count] of Object.entries(cfgData.hooks||{})){
-    html+=`<div class="cfg-item"><span class="ci-name">${h(event)}</span><span class="ci-val">${count}</span></div>`;
+  const hookCount=Object.values(cfgData.hooks||{}).reduce((a,b)=>a+b,0);
+  html+=`<div class="cfg-section"><div class="cfg-section-title">Hooks <span class="count">${hookCount}</span></div>`;
+  if(hookCount===0){
+    html+=`<div class="cfg-guide">Hook を設定すると Claude Code のイベント (Read/Write/Bash 等) がリアルタイムでダッシュボードに表示されます。</div>`;
+  }else{
+    for(const [event,count] of Object.entries(cfgData.hooks||{})){
+      html+=`<div class="cfg-item"><span class="ci-name">${h(event)}</span><span class="ci-val">${count}</span></div>`;
+    }
   }
   html+=`<button class="cfg-action" onclick="sendSkill('/hookify:hookify')">+ Create Hook</button></div>`;
   // Agents
-  html+=`<div class="cfg-section"><div class="cfg-section-title">Subagents <span class="count">${(cfgData.agents||[]).length}</span></div>`;
-  (cfgData.agents||[]).forEach(a=>{
-    html+=`<div class="cfg-item"><span class="ci-name">${h(a.name)}</span></div>`;
-  });
+  const agentCount=(cfgData.agents||[]).length;
+  html+=`<div class="cfg-section"><div class="cfg-section-title">Subagents <span class="count">${agentCount}</span></div>`;
+  if(agentCount===0){
+    html+=`<div class="cfg-guide">.claude/agents/ にエージェントを定義すると、役割を持った専門 AI を呼び出せます。</div>`;
+  }else{
+    (cfgData.agents||[]).forEach(a=>{
+      html+=`<div class="cfg-item"><span class="ci-name">${h(a.name)}</span></div>`;
+    });
+  }
   html+=`</div>`;
   // CLAUDE.md
-  html+=`<div class="cfg-section"><div class="cfg-section-title">CLAUDE.md</div>`;
+  const mdLines=(cfgData.claudeMd||[]).reduce((a,f)=>a+f.lines,0);
+  html+=`<div class="cfg-section"><div class="cfg-section-title">CLAUDE.md <span class="count">${mdLines} lines</span></div>`;
+  if(mdLines<30){
+    html+=`<div class="cfg-guide">CLAUDE.md を充実させると AI の精度が大幅に向上します。Audit で改善点を確認しましょう。</div>`;
+  }
   (cfgData.claudeMd||[]).forEach(f=>{
     html+=`<div class="cfg-item"><span class="ci-name">${h(f.path)}</span><span class="ci-val">${f.lines} lines</span></div>`;
   });
