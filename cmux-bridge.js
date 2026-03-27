@@ -112,30 +112,14 @@ export class CmuxBridge {
 
   async sendToClaudeCode(text, surfaceRef) {
     let target = surfaceRef || this.getDefaultClaudeSurface();
-    if (!target) {
-      // Retry: refresh surfaces and try again
+
+    // If no surface or send fails, refresh once and retry
+    if (!target || !(await this.sendToSurface(target, text))) {
       await this.refreshClaudeSurfaces();
       target = this.getDefaultClaudeSurface();
-      if (!target) {
-        console.error("  cmux: No Claude Code surface found after refresh.");
-        return false;
-      }
-    }
-    let sent = await this.sendToSurface(target, text);
-    if (!sent) {
-      // Retry: surface may be stale, refresh and try new surface
-      console.log("  cmux: Send failed, refreshing surfaces...");
-      await this.refreshClaudeSurfaces();
-      const newTarget = this.getDefaultClaudeSurface();
-      if (newTarget && newTarget !== target) {
-        console.log(`  cmux: Retrying with ${newTarget} (was ${target})`);
-        sent = await this.sendToSurface(newTarget, text);
-        target = newTarget;
-      }
-      if (!sent) {
-        console.error(`  cmux: Failed to send to ${target} after retry.`);
-        return false;
-      }
+      if (!target) { console.error("  cmux: No Claude Code surface found."); return false; }
+      const sent = await this.sendToSurface(target, text);
+      if (!sent) { console.error(`  cmux: Failed to send to ${target} after retry.`); return false; }
     }
     return this.sendKey(target, "enter");
   }

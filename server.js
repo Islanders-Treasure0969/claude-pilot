@@ -56,22 +56,22 @@ app.post("/api/debug", (req, res) => {
   if (debugLogs.length > 100) debugLogs.shift();
   res.json({ ok: true });
 });
-app.get("/api/debug/cmux", async (_r, res) => {
+app.get("/api/debug/cmux", async (req, res) => {
   await cmux.ready;
   const target = cmux.getDefaultClaudeSurface();
-  const testSend = await cmux.sendToSurface(target, "echo debug-test");
-  const testKey = await cmux.sendKey(target, "enter");
-  const testFull = await cmux.sendToClaudeCode("echo full-test");
-  res.json({
+  const result = {
     available: cmux.available,
     socketPath: cmux.socketPath,
     workspaceId: cmux.workspaceId,
     surfaces: cmux.claudeSurfaces,
     defaultSurface: target,
-    testSendResult: testSend,
-    testKeyResult: testKey,
-    testFullResult: testFull,
-  });
+  };
+  // Only run test sends with ?test=1 to avoid accidental command injection
+  if (req.query.test === "1" && target) {
+    result.testSendResult = await cmux.sendToSurface(target, "echo debug-test");
+    result.testKeyResult = await cmux.sendKey(target, "enter");
+  }
+  res.json(result);
 });
 app.get("/api/debug", (_r, res) => res.json({ logs: debugLogs.slice(-20) }));
 
@@ -1161,6 +1161,33 @@ app.get("/api/analytics", (_r, res) => {
 // ── Team execution ──────────────────────────────
 
 const teamQueue = { running: false, current: null, queue: [] };
+const SKILL_TIMEOUT = 120000; // 2 min max per skill
+
+function waitForStopOrTimeout(owner, timeoutMs = SKILL_TIMEOUT) {
+  return new Promise(resolve => {
+    const timeout = setTimeout(() => { clearStopListener(owner); resolve(); }, timeoutMs);
+    setStopListener(owner, () => {
+      clearTimeout(timeout);
+      clearStopListener(owner);
+      setTimeout(resolve, 1000);
+    });
+  });
+}
+
+function extractAgentText(msg) {
+  if (msg.type !== "assistant" || !msg.message?.content) return "";
+  return msg.message.content.filter(c => c.type === "text").map(c => c.text).join("");
+}
+
+async function executeSkillViaAgent(skill) {
+  try {
+    for await (const msg of query({ prompt: skill, options: { cwd: PROJECT_DIR, maxTurns: 15 } })) {
+      const text = extractAgentText(msg);
+      if (text) broadcast({ type: "agent_text", text: `[${skill}] ${text.slice(0, 200)}` });
+    }
+    return { skill, ok: true };
+  } catch (e) { return { skill, ok: false, error: e.message }; }
+}
 
 app.post("/api/team/run", async (req, res) => {
   const { teamId } = req.body;
@@ -1189,70 +1216,32 @@ app.post("/api/team/run", async (req, res) => {
 
   if (cmux.available) {
     if (mode === "parallel") {
-      // Parallel: send all skills simultaneously, don't wait between them
-      const results = await Promise.all(skills.map(async (skill, i) => {
-        broadcast({ type: "team_status", running: true, teamId, label: team.label, total: skills.length, current: i, mode: "parallel" });
+      const results = await Promise.all(skills.map((skill) => {
         addEvent("default", "Team", `[parallel] ${skill}`);
         return cmux.sendToClaudeCode(skill);
       }));
+      broadcast({ type: "team_status", running: true, teamId, label: team.label, total: skills.length, current: skills.length, mode });
       const failed = results.filter(r => !r).length;
       if (failed > 0) addEvent("default", "Team", `${failed}/${skills.length} failed to send`);
     } else {
-      // Sequential: send one by one, wait for Stop hook
       for (let i = 0; i < skills.length; i++) {
         teamQueue.current.index = i;
-        broadcast({ type: "team_status", running: true, teamId, label: team.label, total: skills.length, current: i, mode: "sequential" });
+        broadcast({ type: "team_status", running: true, teamId, label: team.label, total: skills.length, current: i, mode });
         addEvent("default", "Team", `[${i + 1}/${skills.length}] ${skills[i]}`);
 
         const sent = await cmux.sendToClaudeCode(skills[i]);
-        if (!sent) {
-          addEvent("default", "Team", `Failed to send: ${skills[i]}`);
-          break;
-        }
-
-        // Wait for the skill to complete (Stop hook or timeout)
-        if (i < skills.length - 1) {
-          await new Promise(resolve => {
-            const timeout = setTimeout(() => {
-              clearStopListener("team");
-              resolve();
-            }, 120000); // 2 min max per skill
-            setStopListener("team", () => {
-              clearTimeout(timeout);
-              clearStopListener("team");
-              setTimeout(resolve, 1000);
-            });
-          });
-        }
+        if (!sent) { addEvent("default", "Team", `Failed to send: ${skills[i]}`); break; }
+        if (i < skills.length - 1) await waitForStopOrTimeout("team");
       }
     }
   } else {
-    // Fallback: Agent SDK parallel execution
     addEvent("default", "Team", `Running via Agent SDK (${mode})`);
     if (mode === "parallel") {
-      const agentPromises = skills.map(async (skill, i) => {
-        broadcast({ type: "team_status", running: true, teamId, label: team.label, total: skills.length, current: i, mode: "parallel" });
-        try {
-          for await (const msg of query({ prompt: skill, options: { cwd: PROJECT_DIR, maxTurns: 15 } })) {
-            if (msg.type === "assistant" && msg.message?.content) {
-              const text = msg.message.content.filter(c => c.type === "text").map(c => c.text).join("");
-              if (text) broadcast({ type: "agent_text", text: `[${skill}] ${text.slice(0, 200)}` });
-            }
-          }
-          return { skill, ok: true };
-        } catch (e) { return { skill, ok: false, error: e.message }; }
-      });
-      await Promise.all(agentPromises);
+      await Promise.all(skills.map(skill => executeSkillViaAgent(skill)));
     } else {
       for (const skill of skills) {
-        try {
-          for await (const msg of query({ prompt: skill, options: { cwd: PROJECT_DIR, maxTurns: 15 } })) {
-            if (msg.type === "assistant" && msg.message?.content) {
-              const text = msg.message.content.filter(c => c.type === "text").map(c => c.text).join("");
-              if (text) broadcast({ type: "agent_text", text: `[${skill}] ${text.slice(0, 200)}` });
-            }
-          }
-        } catch (e) { addEvent("default", "Team", `Error: ${skill}: ${e.message}`); }
+        const result = await executeSkillViaAgent(skill);
+        if (!result.ok) addEvent("default", "Team", `Error: ${skill}: ${result.error}`);
       }
     }
   }
@@ -1289,12 +1278,7 @@ app.post("/api/batch", async (req, res) => {
     } else {
       for (let i = 0; i < skills.length; i++) {
         await cmux.sendToClaudeCode(skills[i]);
-        if (i < skills.length - 1) {
-          await new Promise(resolve => {
-            const timeout = setTimeout(() => { clearStopListener("team"); resolve(); }, 120000);
-            setStopListener("team", () => { clearTimeout(timeout); clearStopListener("team"); setTimeout(resolve, 1000); });
-          });
-        }
+        if (i < skills.length - 1) await waitForStopOrTimeout("team");
       }
     }
   }

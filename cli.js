@@ -109,15 +109,10 @@ async function cmdServer() {
     "--state-dir", config.stateDir,
   ];
 
-  const child = spawn("node", serverArgs, {
-    stdio: ["inherit", "pipe", "pipe"],
-    env: { ...process.env },
-  });
-  child.stdout.pipe(process.stdout);
-  child.stderr.pipe(process.stderr);
-  child.on("exit", (code) => process.exit(code || 0));
-  process.on("SIGTERM", () => child.kill("SIGTERM"));
-  process.on("SIGINT", () => child.kill("SIGINT"));
+  // Import server.js directly instead of spawning a child process.
+  // Spawning causes stdout pipe conflicts with cmux execFile.
+  process.argv = ["node", "server.js", ...serverArgs.slice(1)];
+  await import("./server.js");
 
   if (hasFlag("open")) {
     setTimeout(() => {
