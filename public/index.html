@@ -865,6 +865,7 @@ async function loadUnregisteredSkills(){
 
 function sendSkill(name){
   document.getElementById('cmd-i').value=name;
+  appendOutput(`> ${name}\n`,'tool');
   runCommand();
 }
 
