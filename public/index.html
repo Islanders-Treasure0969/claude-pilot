@@ -700,6 +700,7 @@ function renderConfig(){
   let html=`<div class="cfg-tabs">
     <button class="cfg-tab active" onclick="switchCfgTab('overview',this)">Overview</button>
     <button class="cfg-tab" onclick="switchCfgTab('plugins',this)">Plugins</button>
+    <button class="cfg-tab" onclick="switchCfgTab('prompts',this)">Prompts</button>
     <button class="cfg-tab" onclick="switchCfgTab('analytics',this)">Analytics</button>
   </div>`;
 
@@ -740,6 +741,13 @@ function renderConfig(){
   html+=`<div id="plugin-list">Loading...</div></div>`;
   html+=`</div>`;
 
+  // Tab: Prompts
+  html+=`<div class="cfg-tab-content" id="cfg-prompts">`;
+  html+=`<div class="cfg-section"><div class="cfg-section-title">Saved Prompts</div>`;
+  html+=`<div id="prompt-list">Loading...</div></div>`;
+  html+=`<button class="cfg-action" onclick="openPromptDialog()">+ New Prompt</button>`;
+  html+=`</div>`;
+
   // Tab: Analytics
   html+=`<div class="cfg-tab-content" id="cfg-analytics">`;
   html+=`<div id="analytics-content">Loading...</div>`;
@@ -748,6 +756,7 @@ function renderConfig(){
   panel.innerHTML=html;
   loadUnregisteredSkills();
   loadPluginStore();
+  loadPromptList();
   loadAnalytics();
 }
 
@@ -936,9 +945,38 @@ async function savePrompt(){
   try{
     const res=await postJson('/api/prompts/save',{name,prompt,description,tags});
     const data=await res.json();
-    if(data.ok){closePromptDialog();alert('Saved!')}
+    if(data.ok){closePromptDialog();loadPromptList()}
     else alert(data.error);
   }catch(e){alert(e.message)}
+}
+
+async function loadPromptList(){
+  const el=document.getElementById('prompt-list');
+  if(!el)return;
+  try{
+    const res=await fetch('/api/prompts');
+    const data=await res.json();
+    const prompts=data.prompts||[];
+    if(prompts.length===0){el.innerHTML='<div style="color:var(--txd);font-size:11px">No saved prompts yet</div>';return}
+    el.innerHTML=prompts.map(p=>`<div class="cfg-item" style="flex-wrap:wrap">
+      <span class="ci-name" title="${h(p.prompt||'')}">${h(p.name||p.file)}</span>
+      <span style="display:flex;gap:4px">
+        <button class="cfg-action" onclick="runPrompt('${h(p.prompt||'')}')">Run</button>
+        <button class="ap-btn" onclick="openPromptDialog('${h(p.prompt||'')}')">Edit</button>
+      </span>
+      ${p.description?`<div style="width:100%;font-size:10px;color:var(--txd);margin-top:2px">${h(p.description)}</div>`:''}
+    </div>`).join('');
+  }catch(e){el.innerHTML='<div style="color:var(--r)">'+h(e.message)+'</div>'}
+}
+
+async function runPrompt(text){
+  if(!text)return;
+  try{
+    const res=await postJson('/api/prompts/run',{prompt:text});
+    const data=await res.json();
+    if(data.ok)addLog('Prompt sent');
+    else addLog('Prompt failed: '+(data.error||'unknown'));
+  }catch(e){addLog('Prompt error: '+e.message)}
 }
 
 /* Keyboard shortcuts */
