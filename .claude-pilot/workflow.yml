@@ -41,6 +41,72 @@ global:
         - name: /skill-creator:skill-creator
           desc: skill-creator (skill-creator vunknown)
           type: prompt
+        - name: /code-review:code-review
+          desc: code-review (code-review vunknown)
+          type: prompt
+        - name: /pr-review-toolkit:review-pr
+          desc: review-pr (pr-review-toolkit vunknown)
+          type: prompt
+        - name: use subagent pr-review-toolkit:code-reviewer
+          desc: code-reviewer (pr-review-toolkit vunknown)
+          type: prompt
+        - name: use subagent pr-review-toolkit:code-simplifier
+          desc: code-simplifier (pr-review-toolkit vunknown)
+          type: prompt
+        - name: use subagent pr-review-toolkit:comment-analyzer
+          desc: comment-analyzer (pr-review-toolkit vunknown)
+          type: prompt
+        - name: use subagent pr-review-toolkit:pr-test-analyzer
+          desc: pr-test-analyzer (pr-review-toolkit vunknown)
+          type: prompt
+        - name: use subagent pr-review-toolkit:silent-failure-hunter
+          desc: silent-failure-hunter (pr-review-toolkit vunknown)
+          type: prompt
+        - name: use subagent pr-review-toolkit:type-design-analyzer
+          desc: type-design-analyzer (pr-review-toolkit vunknown)
+          type: prompt
+        - name: /claude-md-management:revise-claude-md
+          desc: revise-claude-md (claude-md-management v1.0.0)
+          type: prompt
+        - name: /hookify:configure
+          desc: configure (hookify vunknown)
+          type: prompt
+        - name: /hookify:help
+          desc: help (hookify vunknown)
+          type: prompt
+        - name: /hookify:hookify
+          desc: hookify (hookify vunknown)
+          type: prompt
+        - name: /hookify:list
+          desc: list (hookify vunknown)
+          type: prompt
+        - name: use subagent hookify:conversation-analyzer
+          desc: conversation-analyzer (hookify vunknown)
+          type: prompt
+        - name: use subagent code-simplifier:code-simplifier
+          desc: code-simplifier (code-simplifier v1.0.0)
+          type: prompt
+        - name: /feature-dev:feature-dev
+          desc: feature-dev (feature-dev vunknown)
+          type: prompt
+        - name: use subagent feature-dev:code-architect
+          desc: code-architect (feature-dev vunknown)
+          type: prompt
+        - name: use subagent feature-dev:code-explorer
+          desc: code-explorer (feature-dev vunknown)
+          type: prompt
+        - name: use subagent feature-dev:code-reviewer
+          desc: code-reviewer (feature-dev vunknown)
+          type: prompt
+        - name: /agent-sdk-dev:new-sdk-app
+          desc: new-sdk-app (agent-sdk-dev vunknown)
+          type: prompt
+        - name: use subagent agent-sdk-dev:agent-sdk-verifier-py
+          desc: agent-sdk-verifier-py (agent-sdk-dev vunknown)
+          type: prompt
+        - name: use subagent agent-sdk-dev:agent-sdk-verifier-ts
+          desc: agent-sdk-verifier-ts (agent-sdk-dev vunknown)
+          type: prompt
 teams:
   - id: full-review
     label: Full Review
