@@ -278,7 +278,8 @@ async function init(){
   try{
     const ctx=await(await fetch('/api/cmux-context')).json();
     cmuxMode=ctx.available||false;
-  }catch{cmuxMode=false}
+    dbg('cmux-context',{available:ctx.available,surface:ctx.defaultSurface,cmuxMode});
+  }catch(e){cmuxMode=false;dbg('cmux-context-error',{error:e.message})}
   updateCmuxUI();
   renderUI();
   await loadPrds();
@@ -625,9 +626,16 @@ function connectSSE(){
       if(d.type==='agent_error') appendOutput(`\nError: ${d.error}\n`,'err');
     }catch(err){console.error(err)}
   };
-  es.onopen=()=>{
+  es.onopen=async()=>{
     sseRetryDelay=1000;
     prevStsKey='';lastGlobalKey='';
+    // Re-detect cmux on reconnect (server may have restarted)
+    try{
+      const ctx=await(await fetch('/api/cmux-context')).json();
+      cmuxMode=ctx.available||false;
+      dbg('sse-reconnect-cmux',{available:ctx.available,cmuxMode});
+      updateCmuxUI();
+    }catch{}
     loadPrds();
   };
   es.onerror=()=>{

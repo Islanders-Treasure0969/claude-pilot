@@ -109,10 +109,17 @@ async function cmdServer() {
     "--state-dir", config.stateDir,
   ];
 
-  // Import server.js directly instead of spawning a child process.
-  // Spawning causes stdout pipe conflicts with cmux execFile.
-  process.argv = ["node", "server.js", ...serverArgs.slice(1)];
-  await import("./server.js");
+  // Use execSync-style: replace current process with server.js
+  // Both spawn and import have issues with cmux execFile.
+  // Solution: use execv-style replacement via child_process.fork
+  const { fork } = await import("child_process");
+  const child = fork(path.join(__dirname, "server.js"), serverArgs.slice(1), {
+    env: { ...process.env },
+    stdio: ["inherit", "inherit", "inherit", "ipc"],
+  });
+  child.on("exit", (code) => process.exit(code || 0));
+  process.on("SIGTERM", () => child.kill("SIGTERM"));
+  process.on("SIGINT", () => child.kill("SIGINT"));
 
   if (hasFlag("open")) {
     setTimeout(() => {
