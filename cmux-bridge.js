@@ -108,27 +108,27 @@ export class CmuxBridge {
       const result = await this.socketCall("surface.list", {
         workspace: this.workspaceId,
       });
-      const surfaces = (result.surfaces || []).filter(s => s.type === "terminal");
+      const terminals = (result.surfaces || []).filter(s => s.type === "terminal");
       const claudeMatches = [];
       const hereMatches = [];
 
-      for (const s of surfaces) {
-        const ref = `surface:${s.index}`;
-        const title = s.title || "";
-        if (/\bclaude\s*(code|>|\|)/i.test(title) || /^claude\b/i.test(title)) {
-          claudeMatches.push({ ref, title });
+      for (const s of terminals) {
+        const entry = { id: s.id, ref: s.ref, title: s.title || "" };
+        if (/\bclaude\s*(code|>|\|)/i.test(s.title || "") || /^claude\b/i.test(s.title || "")) {
+          claudeMatches.push(entry);
         }
-        if (s.is_caller || s.is_focused) {
-          hereMatches.push({ ref, title });
+        // The surface where Claude Code (this session) is running
+        if (s.selected_in_pane && !s.focused) {
+          hereMatches.push(entry);
         }
       }
 
       if (claudeMatches.length > 0) this.claudeSurfaces = claudeMatches;
       else if (hereMatches.length > 0) this.claudeSurfaces = hereMatches;
       else {
-        this.claudeSurfaces = surfaces
+        this.claudeSurfaces = terminals
           .filter(s => !/^Yazi:|^vim:|^nvim:/i.test(s.title || ""))
-          .map(s => ({ ref: `surface:${s.index}`, title: s.title || "" }));
+          .map(s => ({ id: s.id, ref: s.ref, title: s.title || "" }));
       }
       return this.claudeSurfaces;
     } catch {
@@ -151,19 +151,20 @@ export class CmuxBridge {
   }
 
   getDefaultClaudeSurface() {
-    if (this.claudeSurfaces.length === 1) return this.claudeSurfaces[0].ref;
+    // Return UUID (id) for socket API, not ref
+    if (this.claudeSurfaces.length === 1) return this.claudeSurfaces[0].id;
     const envSurface = this.claudeSurfaces.find(s => s.ref === `surface:${this.surfaceId}`);
-    if (envSurface) return envSurface.ref;
-    return this.claudeSurfaces[0]?.ref || null;
+    if (envSurface) return envSurface.id;
+    return this.claudeSurfaces[0]?.id || null;
   }
 
   // ── Send to Terminal (via direct socket) ───────
 
-  async sendToSurface(surfaceRef, text) {
-    if (!this.available || !surfaceRef) return false;
+  async sendToSurface(surfaceId, text) {
+    if (!this.available || !surfaceId) return false;
     try {
       await this.socketCall("surface.send_text", {
-        surface: surfaceRef,
+        surface_id: surfaceId,
         text,
       });
       return true;
@@ -173,26 +174,10 @@ export class CmuxBridge {
     }
   }
 
-  async sendKey(surfaceRef, key) {
-    if (!this.available || !surfaceRef) return false;
-    try {
-      await this.socketCall("surface.send_key", {
-        surface: surfaceRef,
-        key,
-      });
-      return true;
-    } catch (e) {
-      console.error(`  cmux: sendKey failed — ${e.message}`);
-      return false;
-    }
-  }
-
-  async sendToClaudeCode(text, surfaceRef) {
-    const target = surfaceRef || this.getDefaultClaudeSurface();
+  async sendToClaudeCode(text) {
+    const target = this.getDefaultClaudeSurface();
     if (!target) return false;
-    // Use \n in text to send Enter, avoiding separate sendKey call
-    const sent = await this.sendToSurface(target, text + "\n");
-    return sent;
+    return this.sendToSurface(target, text + "\n");
   }
 
   // ── Sidebar Status ─────────────────────────────
