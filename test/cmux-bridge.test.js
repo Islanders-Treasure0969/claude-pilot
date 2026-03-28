@@ -80,8 +80,8 @@ describe("CmuxBridge — surface selection", () => {
     const original = process.env.CMUX_WORKSPACE_ID;
     delete process.env.CMUX_WORKSPACE_ID;
     const bridge = new CmuxBridge();
-    bridge.claudeSurfaces = [{ ref: "surface:1", title: "Claude Code" }];
-    assert.equal(bridge.getDefaultClaudeSurface(), "surface:1");
+    bridge.claudeSurfaces = [{ id: "uuid-1", ref: "surface:1", title: "Claude Code" }];
+    assert.equal(bridge.getDefaultClaudeSurface(), "uuid-1");
     if (original) process.env.CMUX_WORKSPACE_ID = original;
   });
 
@@ -92,10 +92,10 @@ describe("CmuxBridge — surface selection", () => {
     process.env.CMUX_SURFACE_ID = "2";
     const bridge = new CmuxBridge();
     bridge.claudeSurfaces = [
-      { ref: "surface:1", title: "Other" },
-      { ref: "surface:2", title: "Claude Code" },
+      { id: "uuid-1", ref: "surface:1", title: "Other" },
+      { id: "uuid-2", ref: "surface:2", title: "Claude Code" },
     ];
-    assert.equal(bridge.getDefaultClaudeSurface(), "surface:2");
+    assert.equal(bridge.getDefaultClaudeSurface(), "uuid-2");
     if (originalWs) process.env.CMUX_WORKSPACE_ID = originalWs;
     if (originalSf) process.env.CMUX_SURFACE_ID = originalSf;
     else delete process.env.CMUX_SURFACE_ID;

@@ -45,47 +45,24 @@ export class CmuxBridge {
 
       const sock = net.createConnection(this.socketPath);
       let responseData = "";
-      const timeout = setTimeout(() => {
-        sock.destroy();
-        reject(new Error(`Timeout: ${method}`));
-      }, SOCKET_TIMEOUT);
+      let settled = false;
 
-      sock.on("connect", () => {
-        const msg = JSON.stringify({ method, params });
-        sock.write(msg + "\n");
-      });
+      const settle = (fn, val) => { if (!settled) { settled = true; clearTimeout(timer); sock.destroy(); fn(val); } };
+      const timer = setTimeout(() => settle(reject, new Error(`Timeout: ${method}`)), SOCKET_TIMEOUT);
+
+      sock.on("connect", () => sock.write(JSON.stringify({ method, params }) + "\n"));
 
       sock.on("data", (chunk) => {
         responseData += chunk.toString();
-        // Try to parse complete JSON response
         try {
           const parsed = JSON.parse(responseData);
-          clearTimeout(timeout);
-          sock.end();
-          if (parsed.ok) resolve(parsed.result || {});
-          else reject(new Error(parsed.error || `${method} failed`));
-        } catch {
-          // Incomplete data, wait for more
-        }
+          if (parsed.ok) settle(resolve, parsed.result || {});
+          else settle(reject, new Error(parsed.error?.message || parsed.error || `${method} failed`));
+        } catch { /* incomplete JSON, wait for more */ }
       });
 
-      sock.on("error", (err) => {
-        clearTimeout(timeout);
-        reject(err);
-      });
-
-      sock.on("close", () => {
-        clearTimeout(timeout);
-        if (responseData) {
-          try {
-            const parsed = JSON.parse(responseData);
-            if (parsed.ok) resolve(parsed.result || {});
-            else reject(new Error(parsed.error || `${method} failed`));
-          } catch {
-            reject(new Error(`Invalid response from ${method}`));
-          }
-        }
-      });
+      sock.on("error", (err) => settle(reject, err));
+      sock.on("close", () => { if (!settled) settle(reject, new Error(`Connection closed: ${method}`)); });
     });
   }
 
@@ -131,21 +108,8 @@ export class CmuxBridge {
           .map(s => ({ id: s.id, ref: s.ref, title: s.title || "" }));
       }
       return this.claudeSurfaces;
-    } catch {
-      // Fallback to CLI tree parsing if socket call fails
-      try {
-        const tree = await this.exec(["tree", "--workspace", this.workspaceId]);
-        const allTerminals = [];
-        const hereMatches = [];
-        for (const line of tree.split("\n")) {
-          const termMatch = line.match(/(surface:\d+)\s+\[terminal\]\s+"([^"]*)"/);
-          if (!termMatch) continue;
-          allTerminals.push({ ref: termMatch[1], title: termMatch[2] });
-          if (/here/.test(line)) hereMatches.push({ ref: termMatch[1], title: termMatch[2] });
-        }
-        this.claudeSurfaces = hereMatches.length > 0 ? hereMatches :
-          allTerminals.filter(s => !/^Yazi:|^vim:|^nvim:/i.test(s.title));
-      } catch {}
+    } catch (e) {
+      console.error(`  cmux: refreshClaudeSurfaces failed — ${e.message}`);
       return this.claudeSurfaces;
     }
   }
@@ -187,24 +151,24 @@ export class CmuxBridge {
     const args = ["set-status", key, value, "--workspace", this.workspaceId];
     if (opts.icon) args.push("--icon", opts.icon);
     if (opts.color) args.push("--color", opts.color);
-    try { await this.exec(args); } catch {}
+    try { await this.exec(args); } catch (e) { console.error(`  cmux: setStatus failed — ${e.message}`); }
   }
 
   async clearStatus(key) {
     if (!this.available) return;
-    try { await this.exec(["clear-status", key, "--workspace", this.workspaceId]); } catch {}
+    try { await this.exec(["clear-status", key, "--workspace", this.workspaceId]); } catch (e) { console.error(`  cmux: clearStatus failed — ${e.message}`); }
   }
 
   async setProgress(value, label) {
     if (!this.available) return;
     const args = ["set-progress", String(value), "--workspace", this.workspaceId];
     if (label) args.push("--label", label);
-    try { await this.exec(args); } catch {}
+    try { await this.exec(args); } catch (e) { console.error(`  cmux: setProgress failed — ${e.message}`); }
   }
 
   async clearProgress() {
     if (!this.available) return;
-    try { await this.exec(["clear-progress", "--workspace", this.workspaceId]); } catch {}
+    try { await this.exec(["clear-progress", "--workspace", this.workspaceId]); } catch (e) { console.error(`  cmux: clearProgress failed — ${e.message}`); }
   }
 
   // ── Logging & Notifications ────────────────────
