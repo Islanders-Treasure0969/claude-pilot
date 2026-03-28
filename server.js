@@ -443,7 +443,10 @@ function debouncedPrdRefresh(sessionId = "default") {
 // cmux integration
 app.get("/api/cmux-context", async (_r, res) => {
   await cmux.ready;
-  if (cmux.available) await cmux.refreshClaudeSurfaces();
+  // NOTE: Do NOT call refreshClaudeSurfaces() here.
+  // It runs execFile("cmux tree") which can break subsequent execFile calls
+  // in the same process (cmux Issue #952 — socket accept queue contention).
+  // Surfaces are refreshed once at startup in _init().
   res.json(cmux.getContext());
 });
 

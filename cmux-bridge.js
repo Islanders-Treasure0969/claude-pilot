@@ -34,8 +34,11 @@ export class CmuxBridge {
     // Build args with socket path if available
     const fullArgs = this.socketPath ? ["--socket", this.socketPath, ...args] : args;
     return new Promise((resolve, reject) => {
-      execFile(CMUX_BIN, fullArgs, { timeout: EXEC_TIMEOUT }, (err, stdout) => {
-        if (err) reject(err);
+      execFile(CMUX_BIN, fullArgs, { timeout: EXEC_TIMEOUT }, (err, stdout, stderr) => {
+        if (err) {
+          console.error(`  cmux exec error: ${args[0]} → ${err.code || err.message}${err.killed ? " (killed/timeout)" : ""}${stderr ? " stderr=" + stderr.trim() : ""}`);
+          reject(err);
+        }
         else resolve(stdout.trim());
       });
     });
@@ -84,11 +87,12 @@ export class CmuxBridge {
   // ── Send to Terminal ───────────────────────────
 
   async sendToSurface(surfaceRef, text) {
-    if (!this.available || !surfaceRef) return false;
+    if (!this.available || !surfaceRef) { console.error(`  cmux: sendToSurface blocked — available=${this.available} surfaceRef=${surfaceRef}`); return false; }
     try {
       await this.exec(["send", "--surface", surfaceRef, text]);
       return true;
-    } catch {
+    } catch (e) {
+      console.error(`  cmux: sendToSurface failed — ${e.code || e.message}`);
       return false;
     }
   }
@@ -98,14 +102,16 @@ export class CmuxBridge {
     try {
       await this.exec(["send-key", "--surface", surfaceRef, key]);
       return true;
-    } catch {
+    } catch (e) {
+      console.error(`  cmux: sendKey failed — ${e.code || e.message}`);
       return false;
     }
   }
 
   async sendToClaudeCode(text, surfaceRef) {
     const target = surfaceRef || this.getDefaultClaudeSurface();
-    if (!target) return false;
+    if (!target) { console.error("  cmux: sendToClaudeCode — no target surface"); return false; }
+    console.log(`  cmux: sending to ${target}: ${text.slice(0, 50)}`);
     const sent = await this.sendToSurface(target, text);
     if (!sent) return false;
     return this.sendKey(target, "enter");
