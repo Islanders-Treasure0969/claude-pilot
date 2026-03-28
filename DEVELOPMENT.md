@@ -129,24 +129,15 @@ claude-md-management, hookify, skill-creator, code-simplifier, pyright-lsp, feat
 9. ~~**Plugin/Skills ↔ workflow.yml 同期**~~ — scanInstalledPlugins() + syncWorkflowSkills() で双方向同期。install/uninstall 後に自動実行
 10. ~~**Prompt Library Run 未実装**~~ — Prompts タブ追加、loadPromptList() + runPrompt() 実装
 
-### 未解決: cmux Send to Terminal の不安��性 (Issue #1)
+### 解決済み: cmux Send to Terminal (Issue #1) — Worker プロセスアーキテクチャ
 
-**最優先で解決すべき問題。** 詳細は [Issue #1](https://github.com/Islanders-Treasure0969/claude-pilot/issues/1) を参照。
-
-Express サーバープ��セス内からの cmux ソケット通信が数分で壊れる。cmux ブラウザペインとの競合 (cmux Issue #952) が根本原因だが、ソケット直接通信でも Express プロセス内では不安定。
-
-**次回のアプロ��チ（基礎設計見直し）:**
-1. `feature-dev` plugin の code-architect エージェントで代替設計を検討
-2. 有力な代替案:
-   - cmux 通信を別ワーカープロセスに分離（IPC 連携）
-   - `browser.eval` cmux API でブラウザ側から直接送信
-   - Agent SDK をメインの実行手段にする
-3. `ai-firstify` plugin でアーキテクチャ監査
+**2026-03-28 解決。** Express → cmux-worker.js (別プロセス) → cmux socket の3層構成で安定化。
+0秒、30秒、60秒、90秒の安定テストに合格。cmux ブラウザペインとの共存も問題なし。
 
 ### 次のTODO
-1. **Issue #1 解決** — cmux 通信の基礎設計見直し
-2. **npm publish** — パッケージ公開
-3. **GitHub Pages** — Public 化 + ランディングページ有効化
+1. **npm publish** — パッケージ公開
+2. **GitHub Pages** — Public 化 + ランディングページ有効化
+3. **v0.6.0 残り機能** — Global Skills カード UI、Agent Teams 並列実行
 
 ---
 
