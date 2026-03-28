@@ -1,23 +1,12 @@
 /**
  * cmux Bridge — Encapsulates all cmux CLI interactions for Claude Pilot.
  * Falls back gracefully when cmux is not available.
- *
- * Handles cmux socket instability (Issue #952) via:
- * - Periodic ping heartbeat to detect disconnection early
- * - Socket path re-discovery on failure
- * - Exponential backoff retry on exec failures
- * - Concurrency limiting (max 3 simultaneous execFile calls)
  */
 
 import { execFile } from "child_process";
-import fs from "fs";
-import path from "path";
 
 const EXEC_TIMEOUT = 5000;
 const CMUX_BIN = process.env.CMUX_BIN || "/Applications/cmux.app/Contents/Resources/bin/cmux";
-const HEARTBEAT_INTERVAL = 30000; // 30s
-const MAX_CONCURRENT = 3;
-const SOCKET_ERRORS = /ECONNREFUSED|ENOENT|ETIMEDOUT|socket|connect/i;
 
 export class CmuxBridge {
   constructor() {
@@ -27,126 +16,29 @@ export class CmuxBridge {
     this.socketPath = process.env.CMUX_SOCKET_PATH || null;
     this.available = !!this.workspaceId;
     this.claudeSurfaces = [];
-    this._concurrency = 0;
-    this._queue = [];
 
     this.ready = this.available ? this._init().catch(() => { this.available = false; }) : Promise.resolve();
   }
 
   async _init() {
     try {
-      await this._rawExec(["ping"]);
+      await this.exec(["ping"]);
     } catch {
       this.available = false;
       return;
     }
     await this.refreshClaudeSurfaces();
-    this._startHeartbeat();
   }
 
-  // ── Heartbeat: periodic ping to detect disconnection ──
-
-  _startHeartbeat() {
-    this._heartbeatTimer = setInterval(async () => {
-      if (!this.workspaceId) return;
-      try {
-        await this._rawExec(["ping"]);
-        if (!this.available) {
-          this.available = true;
-          await this.refreshClaudeSurfaces();
-          console.log("  cmux: connection recovered");
-        }
-      } catch {
-        // Always try to re-discover, regardless of current available state
-        const recovered = await this._rediscoverSocket();
-        if (!recovered && this.available) {
-          console.warn("  cmux: heartbeat failed, marking unavailable");
-          this.available = false;
-        }
-      }
-    }, HEARTBEAT_INTERVAL);
-    this._heartbeatTimer.unref();
-  }
-
-  stopHeartbeat() {
-    if (this._heartbeatTimer) clearInterval(this._heartbeatTimer);
-  }
-
-  // ── Socket path re-discovery ──────────────────────
-
-  async _rediscoverSocket() {
-    // Try last-socket-path file (cmux writes this)
-    try {
-      const lastPathFile = path.join(
-        process.env.HOME || "", "Library", "Application Support", "cmux", "last-socket-path"
-      );
-      const newPath = fs.readFileSync(lastPathFile, "utf-8").trim();
-      if (newPath && newPath !== this.socketPath) {
-        this.socketPath = newPath;
-        await this._rawExec(["ping"]);
-        this.available = true;
-        await this.refreshClaudeSurfaces();
-        console.log(`  cmux: recovered via new socket path`);
-        return true;
-      }
-    } catch {}
-
-    // Try without socket path (let cmux auto-detect)
-    try {
-      const saved = this.socketPath;
-      this.socketPath = null;
-      await this._rawExec(["ping"]);
-      this.available = true;
-      await this.refreshClaudeSurfaces();
-      console.log("  cmux: recovered without explicit socket path");
-      return true;
-    } catch {
-      return false;
-    }
-  }
-
-  // ── Concurrency-limited exec ──────────────────────
-
-  async _acquireSemaphore() {
-    if (this._concurrency < MAX_CONCURRENT) { this._concurrency++; return; }
-    await new Promise(resolve => this._queue.push(resolve));
-  }
-
-  _releaseSemaphore() {
-    this._concurrency--;
-    if (this._queue.length > 0) { this._concurrency++; this._queue.shift()(); }
-  }
-
-  // Raw exec without retry or concurrency control (for internal use)
-  _rawExec(args) {
+  exec(args) {
+    // Build args with socket path if available
     const fullArgs = this.socketPath ? ["--socket", this.socketPath, ...args] : args;
     return new Promise((resolve, reject) => {
-      const child = execFile(CMUX_BIN, fullArgs, { timeout: EXEC_TIMEOUT }, (err, stdout) => {
+      execFile(CMUX_BIN, fullArgs, { timeout: EXEC_TIMEOUT }, (err, stdout) => {
         if (err) reject(err);
         else resolve(stdout.trim());
       });
-      child.on("error", () => {}); // Prevent unhandled error
-      child.stdin?.end();
     });
-  }
-
-  // Public exec with concurrency control and retry
-  async exec(args) {
-    await this._acquireSemaphore();
-    try {
-      return await this._rawExec(args);
-    } catch (err) {
-      // Retry once with socket re-discovery if it's a connection error
-      if (SOCKET_ERRORS.test(err.message)) {
-        const recovered = await this._rediscoverSocket();
-        if (recovered) {
-          try { return await this._rawExec(args); } catch { throw err; }
-        }
-      }
-      throw err;
-    } finally {
-      this._releaseSemaphore();
-    }
   }
 
   // ── Claude Code Surface Discovery ──────────────
@@ -166,7 +58,9 @@ export class CmuxBridge {
         const title = termMatch[2];
         allTerminals.push({ ref, title });
 
+        // Priority 1: title contains "Claude Code" (not just path containing "claude")
         if (/\bclaude\s*(code|>|\|)/i.test(title) || /^claude\b/i.test(title)) claudeMatches.push({ ref, title });
+        // Priority 2: "here" marker (current Claude Code session)
         if (/here/.test(line)) hereMatches.push({ ref, title });
       }
 
@@ -194,7 +88,9 @@ export class CmuxBridge {
     try {
       await this.exec(["send", "--surface", surfaceRef, text]);
       return true;
-    } catch { return false; }
+    } catch {
+      return false;
+    }
   }
 
   async sendKey(surfaceRef, key) {
@@ -202,22 +98,16 @@ export class CmuxBridge {
     try {
       await this.exec(["send-key", "--surface", surfaceRef, key]);
       return true;
-    } catch { return false; }
+    } catch {
+      return false;
+    }
   }
 
   async sendToClaudeCode(text, surfaceRef) {
-    // Always refresh before sending to get latest surface state
-    await this.refreshClaudeSurfaces();
-    let target = surfaceRef || this.getDefaultClaudeSurface();
-
-    if (!target || !(await this.sendToSurface(target, text))) {
-      // Retry with fresh surfaces
-      await this.refreshClaudeSurfaces();
-      target = this.getDefaultClaudeSurface();
-      if (!target) { console.error("  cmux: No Claude Code surface found."); return false; }
-      const sent = await this.sendToSurface(target, text);
-      if (!sent) { console.error(`  cmux: Failed to send to ${target} after retry.`); return false; }
-    }
+    const target = surfaceRef || this.getDefaultClaudeSurface();
+    if (!target) return false;
+    const sent = await this.sendToSurface(target, text);
+    if (!sent) return false;
     return this.sendKey(target, "enter");
   }
 
@@ -248,7 +138,7 @@ export class CmuxBridge {
     try { await this.exec(["clear-progress", "--workspace", this.workspaceId]); } catch {}
   }
 
-  // ── Logging & Notifications ────────────────────
+  // ── Logging & Notifications ──────────��─────────
 
   async log(level, source, message) {
     if (!this.available) return;
@@ -272,7 +162,9 @@ export class CmuxBridge {
       if (tree.includes(url)) return false;
       await this.exec(["new-pane", "--type", "browser", "--workspace", this.workspaceId, "--url", url]);
       return true;
-    } catch { return false; }
+    } catch {
+      return false;
+    }
   }
 
   // ── Context ────────────────────────────────────

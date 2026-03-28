@@ -443,16 +443,7 @@ function debouncedPrdRefresh(sessionId = "default") {
 // cmux integration
 app.get("/api/cmux-context", async (_r, res) => {
   await cmux.ready;
-  // Re-check availability on every context request (browser init depends on this)
-  if (cmux.workspaceId) {
-    try {
-      await cmux._rawExec(["ping"]);
-      cmux.available = true;
-      await cmux.refreshClaudeSurfaces();
-    } catch {
-      // Don't mark unavailable here — heartbeat handles that
-    }
-  }
+  if (cmux.available) await cmux.refreshClaudeSurfaces();
   res.json(cmux.getContext());
 });
 
@@ -462,11 +453,10 @@ app.post("/api/cmux-send", async (req, res) => {
   if (!prompt) return res.status(400).json({ error: "prompt required" });
   if (!cmux.available) return res.status(503).json({ error: "cmux not available" });
 
-  // Always refresh surfaces before sending (surfaces can become stale)
-  await cmux.refreshClaudeSurfaces();
   const ok = await cmux.sendToClaudeCode(prompt, surfaceRef);
   if (ok) {
     addEvent("default", "Send", `→ Terminal: ${prompt.length > 100 ? prompt.slice(0, 100) + "..." : prompt}`);
+    cmux.log("info", "pilot", `Sent: ${prompt.slice(0, 80)}`);
   }
   res.json({ ok, message: ok ? "Sent to Claude Code terminal" : "Failed to send" });
 });
