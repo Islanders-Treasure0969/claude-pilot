@@ -129,10 +129,24 @@ claude-md-management, hookify, skill-creator, code-simplifier, pyright-lsp, feat
 9. ~~**Plugin/Skills ↔ workflow.yml 同期**~~ — scanInstalledPlugins() + syncWorkflowSkills() で双方向同期。install/uninstall 後に自動実行
 10. ~~**Prompt Library Run 未実装**~~ — Prompts タブ追加、loadPromptList() + runPrompt() 実装
 
+### 未解決: cmux Send to Terminal の不安��性 (Issue #1)
+
+**最優先で解決すべき問題。** 詳細は [Issue #1](https://github.com/Islanders-Treasure0969/claude-pilot/issues/1) を参照。
+
+Express サーバープ��セス内からの cmux ソケット通信が数分で壊れる。cmux ブラウザペインとの競合 (cmux Issue #952) が根本原因だが、ソケット直接通信でも Express プロセス内では不安定。
+
+**次回のアプロ��チ（基礎設計見直し）:**
+1. `feature-dev` plugin の code-architect エージェントで代替設計を検討
+2. 有力な代替案:
+   - cmux 通信を別ワーカープロセスに分離（IPC 連携）
+   - `browser.eval` cmux API でブラウザ側から直接送信
+   - Agent SDK をメインの実行手段にする
+3. `ai-firstify` plugin でアーキテクチャ監査
+
 ### 次のTODO
-1. **GitHub リポジトリ作成** — リモート設定 + CI
-2. **Playwright でのブラウザ自動テスト** — UI 検証の自動化
-3. **npm publish** — パッケージ公開
+1. **Issue #1 解決** — cmux 通信の基礎設計見直し
+2. **npm publish** — パッケージ公開
+3. **GitHub Pages** — Public 化 + ランディングページ有効化
 
 ---
 
