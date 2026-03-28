@@ -1443,12 +1443,9 @@ app.listen(PORT, async () => {
     if (activePrdId) {
       cmux.setStatus("prd", activePrdId, { icon: "doc", color: "#bc8cff" });
     }
-    // NOTE: Do NOT use cmux.openBrowserPane() here.
-    // cmux browser panes compete with cmux CLI for socket access (Issue #952),
-    // causing all subsequent cmux send/send-key commands to fail.
-    // Use macOS native /usr/bin/open (not cmux's overridden open) for external browser.
-    const openCmd = process.platform === "darwin" ? "/usr/bin/open" : process.platform === "win32" ? "start" : "xdg-open";
-    execFile(openCmd, [`http://localhost:${PORT}`], () => {});
+    // Open in cmux browser pane. This is safe now because we use direct
+    // socket communication instead of execFile CLI (no socket contention).
+    cmux.openBrowserPane(`http://localhost:${PORT}`);
     cmux.log("success", "pilot", `Started on :${PORT}`);
   }
 });
