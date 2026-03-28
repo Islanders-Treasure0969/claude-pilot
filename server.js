@@ -456,7 +456,7 @@ app.post("/api/cmux-send", async (req, res) => {
   if (!prompt) return res.status(400).json({ error: "prompt required" });
   if (!cmux.available) return res.status(503).json({ error: "cmux not available" });
 
-  const ok = await cmux.sendToClaudeCode(prompt, surfaceRef);
+  const ok = await cmux.sendToClaudeCode(prompt);
   if (ok) {
     addEvent("default", "Send", `→ Terminal: ${prompt.length > 100 ? prompt.slice(0, 100) + "..." : prompt}`);
     cmux.log("info", "pilot", `Sent: ${prompt.slice(0, 80)}`);
