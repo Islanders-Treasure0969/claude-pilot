@@ -112,10 +112,14 @@ export class CmuxBridge {
 
       for (const s of terminals) {
         const entry = { id: s.id, ref: s.ref, title: s.title || "" };
+        // Priority 1: title contains "Claude"
         if (/\bclaude\s*(code|>|\|)/i.test(s.title || "") || /^claude\b/i.test(s.title || "")) {
           claudeMatches.push(entry);
         }
-        if (s.selected_in_pane && !s.focused) {
+        // Priority 2: the surface where THIS Claude Code session runs
+        // It's typically selected_in_pane=true (visible tab), could be focused or not
+        // Exclude known non-Claude surfaces by title
+        if (s.selected_in_pane && !/^Yazi:|^vim:|^nvim:|data_platform/i.test(s.title || "")) {
           hereMatches.push(entry);
         }
       }
@@ -135,9 +139,9 @@ export class CmuxBridge {
   }
 
   getDefaultClaudeSurface() {
+    // CMUX_SURFACE_ID is a UUID that directly identifies the Claude Code terminal
+    if (this.surfaceId) return this.surfaceId;
     if (this.claudeSurfaces.length === 1) return this.claudeSurfaces[0].id;
-    const envSurface = this.claudeSurfaces.find(s => s.ref === `surface:${this.surfaceId}`);
-    if (envSurface) return envSurface.id;
     return this.claudeSurfaces[0]?.id || null;
   }
 
