@@ -109,10 +109,8 @@ async function cmdServer() {
     "--state-dir", config.stateDir,
   ];
 
-  const child = spawn("node", serverArgs, { stdio: "inherit" });
-  child.on("exit", (code) => process.exit(code || 0));
-  process.on("SIGTERM", () => child.kill("SIGTERM"));
-  process.on("SIGINT", () => child.kill("SIGINT"));
+  // Run server.js in the same process (no spawn/fork — they break cmux execFile).
+  process.argv = ["node", ...serverArgs];
 
   if (hasFlag("open")) {
     setTimeout(() => {
@@ -121,6 +119,8 @@ async function cmdServer() {
       execFile(openCmd, [url], () => {});
     }, 2000);
   }
+
+  await import(path.resolve(__dirname, "server.js"));
 }
 
 async function cmdInit() {
