@@ -1443,8 +1443,12 @@ app.listen(PORT, async () => {
     if (activePrdId) {
       cmux.setStatus("prd", activePrdId, { icon: "doc", color: "#bc8cff" });
     }
-    // Auto-open browser pane
-    cmux.openBrowserPane(`http://localhost:${PORT}`);
+    // NOTE: Do NOT use cmux.openBrowserPane() here.
+    // cmux browser panes compete with cmux CLI for socket access (Issue #952),
+    // causing all subsequent cmux send/send-key commands to fail.
+    // Use an external browser instead.
+    const openCmd = process.platform === "darwin" ? "open" : process.platform === "win32" ? "start" : "xdg-open";
+    execFile(openCmd, [`http://localhost:${PORT}`], () => {});
     cmux.log("success", "pilot", `Started on :${PORT}`);
   }
 });

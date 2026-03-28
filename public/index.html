@@ -469,16 +469,17 @@ async function runCommand(){
   if(cmuxMode){
     // Send to terminal via cmux
     try{
-      console.log('[cmux-send] sending:', prompt);
+      dbg('cmux-send-request',{prompt});
       const res=await postJson('/api/cmux-send',{prompt});
       const data=await res.json();
-      console.log('[cmux-send] response:', data);
+      dbg('cmux-send-response',data);
       if(data.ok){
         appendOutput(`Sent to terminal: ${prompt}\n`,'done');
       }else{
         appendOutput(`Failed: ${data.error||data.message}\n`,'err');
       }
     }catch(e){
+      dbg('cmux-send-error',{error:e.message});
       appendOutput(`Network error: ${e.message}\n`,'err');
     }
     return;
