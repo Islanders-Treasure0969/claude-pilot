@@ -460,6 +460,28 @@ function openSp(id){
   }
 
   document.getElementById('sp-tp').innerHTML=(step.tips||[]).map(t=>`<li>${h(t)}</li>`).join('');
+
+  // Revert button (for phases that aren't the first)
+  const existingRevert=document.getElementById('sp-revert');
+  if(existingRevert)existingRevert.remove();
+  const stepIdx=W.steps.findIndex(s=>s.id===id);
+  if(stepIdx>0&&sts[id]!=='pending'){
+    const revertBtn=document.createElement('button');
+    revertBtn.id='sp-revert';
+    revertBtn.className='revert-btn';
+    revertBtn.textContent='Revert to this phase';
+    revertBtn.onclick=async()=>{
+      const reason=prompt('Why are you reverting? (手戻り理由)');
+      if(reason===null)return;
+      try{
+        const res=await postJson('/api/phase/revert',{targetPhase:id,reason});
+        const data=await res.json();
+        if(data.ok){appendOutput('Reverted: '+data.message+'\n','tool');refreshPrd()}
+      }catch(e){appendOutput('Revert error: '+e.message+'\n','err')}
+    };
+    skEl.appendChild(revertBtn);
+  }
+
   renderPipe();
 }
 function closeSp(){selStep=null;document.getElementById('sp').classList.remove('open');renderPipe()}

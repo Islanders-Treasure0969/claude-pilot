@@ -552,6 +552,45 @@ app.get("/api/recommendations", (_r, res) => {
   });
 });
 
+// ── Phase Revert (手戻り対応) ────────────────────
+
+app.post("/api/phase/revert", (req, res) => {
+  const { targetPhase, reason } = req.body;
+  if (!targetPhase) return res.status(400).json({ error: "targetPhase required" });
+  if (!activePrdId) return res.status(400).json({ error: "No active PRD" });
+
+  const steps = workflow.steps || [];
+  const target = steps.find(s => s.id === targetPhase);
+  if (!target) return res.status(404).json({ error: "Phase not found" });
+
+  // Record in feedback-log.md
+  const prdDir = path.join(PRD_ROOT, activePrdId);
+  const logFile = path.join(prdDir, "feedback-log.md");
+  const entry = `\n## Revert to ${target.label} — ${new Date().toISOString().slice(0, 16)}\n\n**Reason:** ${reason || "Not specified"}\n\n---\n`;
+
+  try {
+    const existing = readFileSafe(logFile) || "# Feedback Log\n";
+    fs.writeFileSync(logFile, existing + entry);
+  } catch (e) {
+    console.error("Failed to write feedback-log:", e.message);
+  }
+
+  addEvent("default", "Revert", `→ ${target.label}: ${reason || "No reason"}`);
+  broadcast({ type: "step_update" });
+
+  // Refresh PRD status
+  if (activePrdId) syncPrdToSession(activePrdId, "default");
+
+  res.json({ ok: true, message: `Reverted to ${target.label}`, logFile: "feedback-log.md" });
+});
+
+app.get("/api/phase/feedback-log", (_r, res) => {
+  if (!activePrdId) return res.json({ log: null });
+  const logFile = path.join(PRD_ROOT, activePrdId, "feedback-log.md");
+  const content = readFileSafe(logFile);
+  res.json({ log: content || null, prdId: activePrdId });
+});
+
 // Scaffold: scan project and return proposed workflow + unregistered skills
 app.get("/api/scaffold", (_r, res) => {
   const proposed = scaffoldWorkflow(PROJECT_DIR, PROJECT_NAME);
