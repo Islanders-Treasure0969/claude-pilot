@@ -466,6 +466,89 @@ app.post("/api/cmux-send", async (req, res) => {
 
 app.get("/api/workflow", (_r, res) => res.json(safeWorkflow()));
 
+// ── Contextual Recommendations ──────────────────
+// Returns phase-aware skill recommendations based on current state
+
+app.get("/api/recommendations", (_r, res) => {
+  const steps = workflow.steps || [];
+  const allSkills = safeWorkflow().global.skills || [];
+  let currentPhase = null;
+  let statuses = {};
+  let gateDetails = {};
+
+  if (activePrdId) {
+    const prdResult = detectPhaseStatus(activePrdId);
+    statuses = prdResult.statuses;
+    gateDetails = prdResult.gateDetails;
+    currentPhase = getCurrentPhase(statuses);
+  }
+
+  const activeStep = steps.find(s => s.id === currentPhase);
+
+  // Phase-aware skill mapping
+  const phaseSkillMap = {
+    requirements: { keywords: ["prd", "story", "persona", "journey", "requirement"], label: "Requirements" },
+    design: { keywords: ["design", "adr", "architect", "baseline", "spec"], label: "Design" },
+    implement: { keywords: ["implement", "build", "compile", "test", "dbt"], label: "Implementation" },
+    review: { keywords: ["review", "simplify", "security", "code-review", "pr-review"], label: "Review" },
+    ship: { keywords: ["changelog", "version", "release", "publish"], label: "Ship" },
+  };
+
+  // Categorize skills
+  const recommended = [];
+  const explore = [
+    { name: "CTA Interview", desc: "暗黙知を引き出す構造化インタビュー", type: "prompt", category: "explore", selfContained: true },
+    { name: "Retrospective", desc: "過去のPR・判断のパターンを分析", type: "prompt", category: "explore", selfContained: true },
+    { name: "WSP/ISP Classification", desc: "この問題はwell-structuredかill-structuredか判定", type: "prompt", category: "explore", selfContained: true },
+  ];
+  const other = [];
+
+  const phaseConfig = currentPhase ? phaseSkillMap[currentPhase] : null;
+
+  for (const skill of allSkills) {
+    const nameLower = (skill.name + " " + skill.desc).toLowerCase();
+
+    // Always recommend /simplify and /code-review in review phase
+    if (phaseConfig && phaseConfig.keywords.some(k => nameLower.includes(k))) {
+      recommended.push({ ...skill, reason: `${phaseConfig.label} フェーズで推奨` });
+    } else {
+      other.push(skill);
+    }
+  }
+
+  // Add substep-based recommendations
+  if (activeStep) {
+    const substeps = activeStep.substeps || [];
+    for (const ss of substeps.slice(0, 3)) {
+      const exists = recommended.some(r => r.name === ss.name);
+      if (!exists) {
+        recommended.unshift({ name: ss.name, desc: ss.desc || "", type: ss.type || "prompt", reason: "次のサブステップ" });
+      }
+    }
+  }
+
+  // Project health indicators
+  const health = [];
+  const claudeMdPath = path.join(PROJECT_DIR, "CLAUDE.md");
+  const claudeMd = readFileSafe(claudeMdPath);
+  if (!claudeMd || claudeMd.split("\n").length < 30) {
+    health.push({ type: "warn", msg: "CLAUDE.md が薄い — Audit で改善", action: "/claude-md-management:claude-md-improver" });
+  }
+  if (!activePrdId) {
+    health.push({ type: "info", msg: "PRD が未選択 — 作業対象を選択してください" });
+  }
+
+  res.json({
+    currentPhase: currentPhase || null,
+    phaseLabel: phaseConfig?.label || null,
+    recommended: recommended.slice(0, 6),
+    explore,
+    other: other.slice(0, 20),
+    health,
+    mode: "exploitation", // default, UI can toggle
+  });
+});
+
 // Scaffold: scan project and return proposed workflow + unregistered skills
 app.get("/api/scaffold", (_r, res) => {
   const proposed = scaffoldWorkflow(PROJECT_DIR, PROJECT_NAME);

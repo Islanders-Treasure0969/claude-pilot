@@ -12,7 +12,8 @@
   <div class="dot" id="beacon"></div>
   <span class="t">Claude Pilot</span>
   <span class="proj" id="proj"></span>
-  <button class="gb-toggle" id="gb-toggle" onclick="toggleGlobal()">Skills</button>
+  <button class="gb-toggle" id="gb-toggle" onclick="toggleGlobal()">Actions</button>
+  <button class="mode-toggle" id="mode-toggle" onclick="toggleMode()">Exploit</button>
   <span class="agent-badge" id="agent-badge">RUNNING</span>
   <span class="team-running" id="team-badge">TEAM</span>
   <div class="prd-sel">
@@ -281,6 +282,7 @@ async function init(){
     dbg('cmux-context',{available:ctx.available,surface:ctx.defaultSurface,cmuxMode});
   }catch(e){cmuxMode=false;dbg('cmux-context-error',{error:e.message})}
   updateCmuxUI();
+  await loadRecommendations();
   renderUI();
   await loadPrds();
   connectSSE();
@@ -333,6 +335,7 @@ async function selectPrd(prdId){
     if(!res.ok)console.error('selectPrd failed:',res.status);
   }catch(e){console.error('selectPrd:',e);return}
   activePrd=prdId||null;
+  await loadRecommendations();
   if(!prdId){
     sts={};gts={};
     (W.steps||[]).forEach(s=>{sts[s.id]='pending'});

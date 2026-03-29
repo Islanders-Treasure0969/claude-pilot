@@ -54,6 +54,23 @@ body{font-family:var(--m);background:var(--bg);color:var(--tx);height:100vh;disp
 .gb-panel .gb-cat{font-size:9px;text-transform:uppercase;letter-spacing:1.2px;color:var(--txd);padding:8px 0 3px;width:100%;border-top:1px solid var(--bd);margin-top:6px;font-weight:500}
 .gb-panel .gb-cat:first-child{border-top:none;margin-top:0}
 
+/* Mode toggle */
+.mode-toggle{font-family:var(--m);font-size:9px;padding:3px 10px;border-radius:var(--radius);border:1px solid var(--gn);color:var(--gn);background:none;cursor:pointer;margin-left:4px}
+.mode-toggle.explore-mode{border-color:var(--pu);color:var(--pu);background:rgba(188,140,255,.08)}
+
+/* Recommended skills */
+.gb-panel .gsk.recommended{border-color:var(--gn);background:rgba(63,185,80,.06)}
+.gb-panel .gsk.recommended:hover{background:rgba(63,185,80,.12)}
+.gb-panel .gsk.dimmed{opacity:.5}
+.gb-panel .gsk.dimmed:hover{opacity:1}
+.gb-panel .gsk.explore{border-color:var(--pu);color:var(--pu)}
+.gb-panel .gsk.explore:hover{background:rgba(188,140,255,.08)}
+.gb-panel .gsk .sk-reason{font-size:8px;color:var(--gn);width:100%;font-style:italic}
+
+/* Health warnings */
+.gb-health{font-size:10px;color:var(--or);background:rgba(210,153,34,.08);border:1px solid rgba(210,153,34,.2);border-radius:var(--radius);padding:6px 10px;margin-bottom:6px;width:100%;display:flex;align-items:center;gap:6px}
+.gb-health .health-icon{font-size:12px;font-weight:bold;flex-shrink:0}
+
 /* Team chips */
 .team-chip{font-family:var(--m);font-size:10px;padding:5px 12px;border-radius:var(--radius);border:1px solid var(--or);background:var(--orb);color:var(--or);cursor:pointer;transition:all .12s;white-space:nowrap;display:flex;align-items:center;gap:6px}
 .team-chip:hover{background:rgba(210,153,34,.15)}
