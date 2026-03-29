@@ -984,6 +984,21 @@ async function loadAnalytics(){
     if(!el)return;
     let html='';
 
+    // Usage analytics
+    try{
+      const usage=await(await fetch('/api/usage-analytics')).json();
+      html+=`<div class="cfg-section"><div class="cfg-section-title">App Usage <span class="count">${usage.score}%</span></div>`;
+      html+=`<div class="progress-bar"><div class="fill" style="width:${usage.score}%;background:${usage.score>60?'var(--gn)':usage.score>30?'var(--or)':'var(--r)'}"></div></div>`;
+      html+=`<div style="font-size:9px;color:var(--txd);margin:4px 0">${usage.usedFeatures}/${usage.totalFeatures} features used</div>`;
+      for(const [key,f] of Object.entries(usage.features||{})){
+        const icon=f.status==='active'?'&#10003;':'&#10007;';
+        const color=f.status==='active'?'var(--gn)':'var(--txd)';
+        html+=`<div class="cfg-item"><span style="color:${color}">${icon}</span><span class="ci-name">${h(key)}</span><span class="ci-val">${f.count}x</span></div>`;
+        if(f.status==='unused'){html+=`<div style="font-size:9px;color:var(--or);padding-left:20px;margin-bottom:4px">${h(f.suggestion)}</div>`}
+      }
+      html+=`</div>`;
+    }catch{}
+
     // CLAUDE.md score
     const score=data.claudeMd?.score||0;
     const stars='*'.repeat(Math.round(score/20))+'_'.repeat(5-Math.round(score/20));
