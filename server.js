@@ -54,6 +54,8 @@ app.post("/api/debug", (req, res) => {
   console.log(entry);
   debugLogs.push({ ts: Date.now(), msg, data });
   if (debugLogs.length > 100) debugLogs.shift();
+  // Track feature usage from debug events
+  if (msg === "dt-action") trackUsage("decision_tree");
   res.json({ ok: true });
 });
 app.get("/api/debug/cmux", async (req, res) => {
@@ -507,7 +509,7 @@ app.get("/api/recommendations", (_r, res) => {
     const nameLower = (skill.name + " " + skill.desc).toLowerCase();
 
     // Match against step tags (not hardcoded keywords)
-    if (activeTags.length > 0 && activeTags.some(tag => nameLower.includes(tag))) {
+    if (activeTags.length > 0 && activeTags.some(tag => new RegExp(`\\b${tag}\\b`).test(nameLower))) {
       recommended.push({ ...skill, reason: `${activeLabel} フェーズで推奨` });
     } else {
       other.push(skill);
@@ -558,9 +560,10 @@ function loadUsage() {
 function saveUsage() {
   try { fs.writeFileSync(USAGE_FILE, JSON.stringify(usageCounters)); } catch {}
 }
+let usageDirty = false;
 function trackUsage(feature) {
   usageCounters[feature] = (usageCounters[feature] || 0) + 1;
-  saveUsage();
+  if (!usageDirty) { usageDirty = true; setTimeout(() => { saveUsage(); usageDirty = false; }, 5000); }
 }
 loadUsage();
 

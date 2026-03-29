@@ -190,6 +190,7 @@ function renderDecisionTree(container){
 }
 
 function handleDtAction(action){
+  fetch('/api/debug',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({msg:'dt-action',data:{type:action.type,name:action.name||''}})}).catch(()=>{});
   if(action.type==='skill'){
     document.getElementById('cmd-i').value=action.prompt||action.name;
     appendOutput('> '+action.name+'\n','tool');
@@ -264,7 +265,8 @@ function renderGlobal(){
     const lbl=document.createElement('span');lbl.className='gb-cat';lbl.textContent='Exploration Tools';grid.appendChild(lbl);
     rec.explore.forEach(s=>grid.appendChild(createSkillChip(s,'gsk explore')));
   }
-  toggle.textContent='Actions ('+(rec.recommended.length+rec.other.length)+')';
+  const count=currentMode==='exploitation'?rec.recommended.length+rec.other.length:rec.explore.length;
+  toggle.textContent='Actions ('+count+')';
 }
 
 function renderSuggestions(){
