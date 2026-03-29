@@ -497,9 +497,12 @@ app.get("/api/recommendations", (_r, res) => {
   // Categorize skills
   const recommended = [];
   const explore = [
-    { name: "CTA Interview", desc: "暗黙知を引き出す構造化インタビュー", type: "prompt", category: "explore", selfContained: true },
-    { name: "Retrospective", desc: "過去のPR・判断のパターンを分析", type: "prompt", category: "explore", selfContained: true },
-    { name: "WSP/ISP Classification", desc: "この問題はwell-structuredかill-structuredか判定", type: "prompt", category: "explore", selfContained: true },
+    { name: "CTA Interview", desc: "暗黙知を引き出す構造化インタビュー（Critical Decision Method）", type: "prompt", category: "explore", selfContained: true,
+      prompt: "あなたはCognitive Task Analysisのインタビュアーです。私が最近経験した困難な技術的判断について、Critical Decision Methodに基づいてインタビューしてください。以下のプローブ質問を使ってください：1. その判断をした時点で、どんな情報が見えていたか？ 2. 状況をどう評価したか？何が異常で何が正常だったか？ 3. 他にどんな選択肢があったか？なぜそれらを選ばなかったか？ 4. 何がうまくいかなかったら方針を変えていたか？ 5. 経験の浅いメンバーは、この状況で何を見落としそうか？ 引き出した知識は .claude/references/ や ADR に記録してください。" },
+    { name: "Retrospective", desc: "過去のPR・判断のパターンを分析して改善点を発見", type: "prompt", category: "explore", selfContained: true,
+      prompt: "過去1ヶ月のgit logとPRを分析して、以下を報告してください：1. 手戻りが多かったファイルやモジュール 2. 繰り返し発生したバグのパターン 3. 設計判断の一貫性（矛盾する判断がないか） 4. Skill化・Hook化すべきパターン 5. 改善提案（具体的なアクション付き）" },
+    { name: "WSP/ISP Classification", desc: "この問題はwell-structuredかill-structuredか判定し、適切なアプローチを提案", type: "prompt", category: "explore", selfContained: true,
+      prompt: "今取り組んでいる問題について分析してください。Simon (1973) の分類に基づいて：1. 初期状態は明確か？ 2. 目標状態は明確か？ 3. 操作（解法）は明確か？ → 全てYesならWell-Structured Problem（Skills/自動化で対応可能）、いずれかNoならIll-Structured Problem（まず問題の構造化が必要）。ISPの場合、well-structuredなサブ問題に分解する方法を提案してください。" },
   ];
   const other = [];
 

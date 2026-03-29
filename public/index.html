@@ -235,7 +235,8 @@ function showSkillDetail(skill,eventOrEl,isHover){
       e.stopPropagation();
       dbg('sk-run clicked',{skill:skill.name});
       closeSkillDetail();
-      document.getElementById('cmd-i').value=skill.name;
+      // Use prompt field if available (e.g. exploration tools with full prompt templates)
+      document.getElementById('cmd-i').value=skill.prompt||skill.name;
       runCommand();
     };
   }
