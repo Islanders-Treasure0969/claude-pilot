@@ -128,50 +128,78 @@ function createSkillChip(skill,cssClass){
 }
 
 let globalPanelOpen=false;
+let currentMode='exploitation';
+let recommendations=null;
+
+function toggleMode(){
+  currentMode=currentMode==='exploitation'?'exploration':'exploitation';
+  const btn=document.getElementById('mode-toggle');
+  btn.textContent=currentMode==='exploitation'?'Exploit':'Explore';
+  btn.classList.toggle('explore-mode',currentMode==='exploration');
+  renderGlobal();
+}
+
+async function loadRecommendations(){
+  try{recommendations=await(await fetch('/api/recommendations')).json()}catch{recommendations=null}
+}
 
 function renderGlobal(){
-  const g=W.global;
-  const key=JSON.stringify(g);
-  if(key===lastGlobalKey)return;
-  lastGlobalKey=key;
   const grid=document.getElementById('global-grid');
   const toggle=document.getElementById('gb-toggle');
-  if(!g||!(g.skills||[]).length){
-    grid.innerHTML='';
-    toggle.style.display='none';
+  grid.innerHTML='';
+  if(!recommendations){
+    const g=W.global;
+    if(!g||!(g.skills||[]).length){toggle.style.display='none';return}
+    toggle.style.display='';
+    toggle.textContent='Actions ('+(g.skills||[]).length+')';
+    (g.skills||[]).forEach(s=>grid.appendChild(createSkillChip(s,'gsk')));
     return;
   }
   toggle.style.display='';
-  const allSkills=(g.skills||[]);
-  toggle.textContent=`Global Skills (${allSkills.length})`;
-  grid.innerHTML='';
-  if(g.categories&&g.categories.length>0){
-    g.categories.forEach(cat=>{
-      const label=document.createElement('span');
-      label.className='gb-cat';
-      label.textContent=cat.name;
-      grid.appendChild(label);
-      (cat.skills||[]).forEach(s=>grid.appendChild(createSkillChip(s,'gsk')));
-    });
-  } else {
-    allSkills.forEach(s=>grid.appendChild(createSkillChip(s,'gsk')));
-  }
-  // Teams
-  const teams=W.teams||[];
-  if(teams.length>0){
-    const label=document.createElement('span');
-    label.className='gb-cat';
-    label.textContent='Teams';
-    grid.appendChild(label);
-    teams.forEach(t=>{
-      const el=document.createElement('span');
-      el.className='team-chip';
-      el.innerHTML=`<span class="badge">${t.mode||'seq'}</span>${h(t.label)}`;
-      el.title=t.desc||'';
-      el.onclick=()=>runTeam(t.id,t.label,t.desc);
+  const rec=recommendations;
+  if(rec.health&&rec.health.length>0){
+    rec.health.forEach(hi=>{
+      const el=document.createElement('div');
+      el.className='gb-health';
+      el.textContent=(hi.type==='warn'?'! ':'i ')+hi.msg;
+      if(hi.action){el.style.cursor='pointer';el.onclick=()=>sendSkill(hi.action)}
       grid.appendChild(el);
     });
   }
+  if(currentMode==='exploitation'){
+    if(rec.recommended.length>0){
+      const lbl=document.createElement('span');lbl.className='gb-cat';
+      lbl.textContent=rec.phaseLabel?rec.phaseLabel+' — Recommended':'Recommended';
+      grid.appendChild(lbl);
+      rec.recommended.forEach(s=>{
+        const chip=createSkillChip(s,'gsk recommended');
+        if(s.reason){const r=document.createElement('span');r.className='sk-reason';r.textContent=s.reason;chip.appendChild(r)}
+        grid.appendChild(chip);
+      });
+    }
+    const teams=W.teams||[];
+    if(teams.length>0){
+      const lbl=document.createElement('span');lbl.className='gb-cat';lbl.textContent='Teams';grid.appendChild(lbl);
+      teams.forEach(t=>{
+        const el=document.createElement('span');el.className='team-chip';
+        el.textContent=(t.mode||'seq')+' '+t.label;el.title=t.desc||'';
+        el.onclick=()=>runTeam(t.id,t.label,t.desc);grid.appendChild(el);
+      });
+    }
+    if(rec.other.length>0){
+      const lbl=document.createElement('span');lbl.className='gb-cat';lbl.textContent='All Skills ('+rec.other.length+')';grid.appendChild(lbl);
+      rec.other.forEach(s=>grid.appendChild(createSkillChip(s,'gsk dimmed')));
+    }
+  }else{
+    const lbl=document.createElement('span');lbl.className='gb-cat';lbl.textContent='Exploration Tools';grid.appendChild(lbl);
+    rec.explore.forEach(s=>grid.appendChild(createSkillChip(s,'gsk explore')));
+    const ml=document.createElement('span');ml.className='gb-cat';ml.textContent='Meta-cognitive Checks';grid.appendChild(ml);
+    [{name:'WSP or ISP?',desc:'well-structured か ill-structured か判定',type:'prompt'},
+     {name:'Mode check',desc:'Exploitation で進めていいか確認',type:'prompt'},
+     {name:'Skill化すべき?',desc:'この判断は再利用可能か',type:'prompt'}
+    ].forEach(s=>grid.appendChild(createSkillChip(s,'gsk explore')));
+  }
+  toggle.textContent='Actions ('+(rec.recommended.length+rec.other.length)+')';
 }
 
 function renderSuggestions(){
