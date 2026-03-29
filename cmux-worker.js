@@ -11,7 +11,7 @@
  *   {"id": 1, "action": "send", "surface_id": "UUID", "text": "hello\n"}
  *   {"id": 2, "action": "ping"}
  *   {"id": 3, "action": "list", "workspace_id": "UUID"}
- *   {"id": 4, "action": "raw", "method": "...", "params": {...}}
+ *   {"id": 4, "action": "raw", "method": "surface.send_key", "params": {"surface_id":"UUID","key":"enter"}}
  *
  * Protocol (worker → stdout):
  *   {"id": 1, "ok": true, "result": {}}

@@ -1,5 +1,5 @@
 /**
- * Claude Pilot v0.4.0 — Development Cockpit with Agent SDK + PRD Tracking
+ * Claude Pilot v0.6.0 — Development Cockpit with Agent SDK + PRD Tracking
  *
  *   node server.js --project /path/to/project [--port 3456]
  *                   [--prd-root .local/prd] [--state-dir .local/claude_pilot/state]
@@ -1430,7 +1430,7 @@ app.listen(PORT, async () => {
   const prds = discoverPrds();
   const cmuxStatus = cmux.available ? `workspace:${cmux.workspaceId?.slice(0, 8)}` : "not available";
   console.log(`
-  Claude Pilot v0.4.0  http://localhost:${PORT}
+  Claude Pilot v0.6.0  http://localhost:${PORT}
    Project:  ${PROJECT_NAME} (${PROJECT_DIR})
    Workflow: ${workflow?.name || "Default"}
    PRDs:     ${prds.length} found
@@ -1439,7 +1439,7 @@ app.listen(PORT, async () => {
 `);
   // cmux initialization
   if (cmux.available) {
-    cmux.setStatus("pilot", `v0.3.3 :${PORT}`, { icon: "bolt.fill", color: "#58a6ff" });
+    cmux.setStatus("pilot", `v0.6.0 :${PORT}`, { icon: "bolt.fill", color: "#58a6ff" });
     if (activePrdId) {
       cmux.setStatus("prd", activePrdId, { icon: "doc", color: "#bc8cff" });
     }
