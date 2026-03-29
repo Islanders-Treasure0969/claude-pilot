@@ -120,6 +120,7 @@ steps:
     label: Requirements
     description: ユーザーストーリー整理・要件定義
     dir: requirements
+    tags: [requirements, planning, prd]
     gate:
       rules:
         - type: checklist
@@ -143,6 +144,7 @@ steps:
     label: Design
     description: 技術設計・API設計・UIモック
     dir: design
+    tags: [design, architecture, spec]
     gate:
       depends_on:
         - requirements
@@ -165,6 +167,7 @@ steps:
     label: Implement
     description: コード実装
     dir: implement
+    tags: [implement, coding, test]
     gate:
       depends_on:
         - design
@@ -191,6 +194,7 @@ steps:
     label: Review
     description: コードレビュー・品質チェック
     dir: review
+    tags: [review, quality, security]
     gate:
       depends_on:
         - implement
@@ -215,6 +219,7 @@ steps:
     label: Ship
     description: リリース・ドキュメント更新
     dir: ship
+    tags: [release, deploy, publish]
     gate:
       depends_on:
         - review

@@ -192,6 +192,7 @@ function safeWorkflow() {
     steps: (workflow.steps || []).map(s => ({
       id: s.id, label: s.label,
       description: s.description || "",
+      tags: s.tags || [],
       skills: mapSkills(s.skills),
       substeps: (s.substeps || []).map(ss => ({
         id: ss.id, name: ss.name, desc: ss.desc || "",
@@ -459,6 +460,7 @@ app.post("/api/cmux-send", async (req, res) => {
   const ok = await cmux.sendToClaudeCode(prompt);
   if (ok) {
     addEvent("default", "Send", `→ Terminal: ${prompt.length > 100 ? prompt.slice(0, 100) + "..." : prompt}`);
+    trackUsage("send_to_terminal");
     cmux.log("info", "pilot", `Sent: ${prompt.slice(0, 80)}`);
   }
   res.json({ ok, message: ok ? "Sent to Claude Code terminal" : "Failed to send" });
@@ -485,14 +487,9 @@ app.get("/api/recommendations", (_r, res) => {
 
   const activeStep = steps.find(s => s.id === currentPhase);
 
-  // Phase-aware skill mapping
-  const phaseSkillMap = {
-    requirements: { keywords: ["prd", "story", "persona", "journey", "requirement"], label: "Requirements" },
-    design: { keywords: ["design", "adr", "architect", "baseline", "spec"], label: "Design" },
-    implement: { keywords: ["implement", "build", "compile", "test", "dbt"], label: "Implementation" },
-    review: { keywords: ["review", "simplify", "security", "code-review", "pr-review"], label: "Review" },
-    ship: { keywords: ["changelog", "version", "release", "publish"], label: "Ship" },
-  };
+  // Tag-based skill matching (reads tags from workflow.yml steps)
+  const activeTags = activeStep?.tags || [];
+  const activeLabel = activeStep?.label || currentPhase || "";
 
   // Categorize skills
   const recommended = [];
@@ -506,14 +503,12 @@ app.get("/api/recommendations", (_r, res) => {
   ];
   const other = [];
 
-  const phaseConfig = currentPhase ? phaseSkillMap[currentPhase] : null;
-
   for (const skill of allSkills) {
     const nameLower = (skill.name + " " + skill.desc).toLowerCase();
 
-    // Always recommend /simplify and /code-review in review phase
-    if (phaseConfig && phaseConfig.keywords.some(k => nameLower.includes(k))) {
-      recommended.push({ ...skill, reason: `${phaseConfig.label} フェーズで推奨` });
+    // Match against step tags (not hardcoded keywords)
+    if (activeTags.length > 0 && activeTags.some(tag => nameLower.includes(tag))) {
+      recommended.push({ ...skill, reason: `${activeLabel} フェーズで推奨` });
     } else {
       other.push(skill);
     }
@@ -543,7 +538,7 @@ app.get("/api/recommendations", (_r, res) => {
 
   res.json({
     currentPhase: currentPhase || null,
-    phaseLabel: phaseConfig?.label || null,
+    phaseLabel: activeLabel || null,
     recommended: recommended.slice(0, 6),
     explore,
     other: other.slice(0, 20),
@@ -551,6 +546,87 @@ app.get("/api/recommendations", (_r, res) => {
     mode: "exploitation", // default, UI can toggle
   });
 });
+
+// ── Usage Analytics ──────────────────────────────
+
+const usageCounters = {};
+const USAGE_FILE = path.join(STATE_DIR, "_usage.json");
+
+function loadUsage() {
+  try { Object.assign(usageCounters, JSON.parse(fs.readFileSync(USAGE_FILE, "utf-8"))); } catch {}
+}
+function saveUsage() {
+  try { fs.writeFileSync(USAGE_FILE, JSON.stringify(usageCounters)); } catch {}
+}
+function trackUsage(feature) {
+  usageCounters[feature] = (usageCounters[feature] || 0) + 1;
+  saveUsage();
+}
+loadUsage();
+
+app.get("/api/usage-analytics", (_r, res) => {
+  const features = {
+    send_to_terminal: { count: usageCounters.send_to_terminal || 0, suggestion: "スキルをクリックして Send to Terminal を試してみましょう" },
+    teams: { count: usageCounters.teams || 0, suggestion: "Full Review チームでコード品質を一括チェックできます" },
+    explore_mode: { count: usageCounters.explore_mode || 0, suggestion: "Explore モードで振り返りや問題分析ができます" },
+    prompt_library: { count: usageCounters.prompt_library || 0, suggestion: "よく使うコマンドを Save ボタンで保存できます" },
+    autopilot: { count: usageCounters.autopilot || 0, suggestion: "Autopilot でサブステップを自動実行できます" },
+    decision_tree: { count: usageCounters.decision_tree || 0, suggestion: "Explore モードの決定木で最適なアクションを見つけられます" },
+    phase_revert: { count: usageCounters.phase_revert || 0, suggestion: "手戻りが必要な時は Phase Revert で前のフェーズに戻れます" },
+  };
+
+  let used = 0;
+  for (const f of Object.values(features)) {
+    f.status = f.count > 0 ? "active" : "unused";
+    if (f.count > 0) used++;
+  }
+  const score = Math.round((used / Object.keys(features).length) * 100);
+
+  res.json({ score, features, totalFeatures: Object.keys(features).length, usedFeatures: used });
+});
+
+// ── Decision Tree Navigation ────────────────────
+
+const DECISION_TREE = {
+  question: "今どんな状態ですか？",
+  options: [
+    {
+      label: "行き詰まってる",
+      next: {
+        question: "どんな種類の行き詰まり？",
+        options: [
+          { label: "同じエラーが繰り返し出る", action: { type: "skill", name: "WSP/ISP Classification", prompt: "今取り組んでいる問題について分析してください。Simon (1973) の分類に基づいて：1. 初期状態は明確か？ 2. 目標状態は明確か？ 3. 操作（解法）は明確か？ ISPの場合、well-structuredなサブ問題に分解する方法を提案してください。" } },
+          { label: "設計方針が定まらない", action: { type: "skill", name: "CTA Interview", prompt: "あなたはCognitive Task Analysisのインタビュアーです。私が最近経験した困難な技術的判断について、Critical Decision Methodに基づいてインタビューしてください。" } },
+          { label: "何をすべきかわからない", action: { type: "mode", value: "exploration" } },
+        ],
+      },
+    },
+    {
+      label: "振り返りたい",
+      next: {
+        question: "何を振り返る？",
+        options: [
+          { label: "最近の手戻りやバグ", action: { type: "skill", name: "Retrospective", prompt: "過去1ヶ月のgit logとPRを分析して、手戻りパターン、繰り返しバグ、Skill化すべきパターンを報告してください。" } },
+          { label: "設計判断の妥当性", action: { type: "skill", name: "CTA Interview", prompt: "あなたはCognitive Task Analysisのインタビュアーです。最近の設計判断についてインタビューしてください。" } },
+          { label: "アプリの活用度", action: { type: "navigate", target: "analytics" } },
+        ],
+      },
+    },
+    {
+      label: "新しいタスクを始める",
+      next: {
+        question: "タスクの性質は？",
+        options: [
+          { label: "やることが明確（手順が決まってる）", action: { type: "autopilot" } },
+          { label: "やることが不明確（調査や設計が必要）", action: { type: "skill", name: "WSP/ISP Classification", prompt: "これから取り組むタスクについて、well-structuredかill-structuredかを判定し、適切なアプローチを提案してください。" } },
+          { label: "既存の問題を改善したい", action: { type: "mode", value: "exploration" } },
+        ],
+      },
+    },
+  ],
+};
+
+app.get("/api/decision-tree", (_r, res) => res.json(DECISION_TREE));
 
 // ── Phase Revert (手戻り対応) ────────────────────
 

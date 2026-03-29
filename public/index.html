@@ -143,6 +143,69 @@ async function loadRecommendations(){
   try{recommendations=await(await fetch('/api/recommendations')).json()}catch{recommendations=null}
 }
 
+let decisionTree=null;
+let dtPath=[];
+
+async function loadDecisionTree(){
+  try{decisionTree=await(await fetch('/api/decision-tree')).json()}catch{decisionTree=null}
+}
+
+function renderDecisionTree(container){
+  if(!decisionTree)return;
+  const wrap=document.createElement('div');wrap.className='dt-wrap';
+
+  // Navigate to current node
+  let node=decisionTree;
+  for(const idx of dtPath){
+    if(node.options&&node.options[idx]&&node.options[idx].next) node=node.options[idx].next;
+    else break;
+  }
+
+  const q=document.createElement('div');q.className='dt-question';q.textContent=node.question||'';
+  wrap.appendChild(q);
+
+  if(node.options){
+    node.options.forEach((opt,i)=>{
+      const btn=document.createElement('button');btn.className='dt-option';
+      btn.textContent=opt.label;
+      btn.onclick=()=>{
+        if(opt.next){
+          dtPath.push(i);
+          renderGlobal();
+        }else if(opt.action){
+          handleDtAction(opt.action);
+        }
+      };
+      wrap.appendChild(btn);
+    });
+  }
+
+  if(dtPath.length>0){
+    const back=document.createElement('button');back.className='dt-back';back.textContent='← 戻る';
+    back.onclick=()=>{dtPath.pop();renderGlobal()};
+    wrap.appendChild(back);
+  }
+
+  container.appendChild(wrap);
+}
+
+function handleDtAction(action){
+  if(action.type==='skill'){
+    document.getElementById('cmd-i').value=action.prompt||action.name;
+    appendOutput('> '+action.name+'\n','tool');
+    runCommand();
+  }else if(action.type==='mode'){
+    currentMode=action.value==='exploration'?'exploration':'exploitation';
+    document.getElementById('mode-toggle').textContent=currentMode==='exploitation'?'Exploit':'Explore';
+    renderGlobal();
+  }else if(action.type==='autopilot'){
+    startAutopilot();
+  }else if(action.type==='navigate'&&action.target==='analytics'){
+    toggleGlobal();toggleConfig();
+  }
+  dtPath=[];
+}
+
 function renderGlobal(){
   const grid=document.getElementById('global-grid');
   const toggle=document.getElementById('gb-toggle');
@@ -187,17 +250,19 @@ function renderGlobal(){
       });
     }
     if(rec.other.length>0){
-      const lbl=document.createElement('span');lbl.className='gb-cat';lbl.textContent='All Skills ('+rec.other.length+')';grid.appendChild(lbl);
-      rec.other.forEach(s=>grid.appendChild(createSkillChip(s,'gsk dimmed')));
+      const details=document.createElement('details');
+      details.className='skills-collapse';
+      details.innerHTML='<summary class="gb-cat" style="cursor:pointer">All Skills ('+rec.other.length+')</summary>';
+      const inner=document.createElement('div');inner.className='gb-grid';inner.style.marginTop='6px';
+      rec.other.forEach(s=>inner.appendChild(createSkillChip(s,'gsk dimmed')));
+      details.appendChild(inner);
+      grid.appendChild(details);
     }
   }else{
+    // EXPLORATION MODE: Decision tree first, then tools
+    renderDecisionTree(grid);
     const lbl=document.createElement('span');lbl.className='gb-cat';lbl.textContent='Exploration Tools';grid.appendChild(lbl);
     rec.explore.forEach(s=>grid.appendChild(createSkillChip(s,'gsk explore')));
-    const ml=document.createElement('span');ml.className='gb-cat';ml.textContent='Meta-cognitive Checks';grid.appendChild(ml);
-    [{name:'WSP or ISP?',desc:'well-structured か ill-structured か判定',type:'prompt'},
-     {name:'Mode check',desc:'Exploitation で進めていいか確認',type:'prompt'},
-     {name:'Skill化すべき?',desc:'この判断は再利用可能か',type:'prompt'}
-    ].forEach(s=>grid.appendChild(createSkillChip(s,'gsk explore')));
   }
   toggle.textContent='Actions ('+(rec.recommended.length+rec.other.length)+')';
 }
@@ -311,7 +376,7 @@ async function init(){
     dbg('cmux-context',{available:ctx.available,surface:ctx.defaultSurface,cmuxMode});
   }catch(e){cmuxMode=false;dbg('cmux-context-error',{error:e.message})}
   updateCmuxUI();
-  await loadRecommendations();
+  await Promise.all([loadRecommendations(), loadDecisionTree()]);
   renderUI();
   await loadPrds();
   connectSSE();
