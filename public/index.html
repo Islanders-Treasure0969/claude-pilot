@@ -365,6 +365,7 @@ async function selectPrd(prdId){
   }catch(e){console.error('selectPrd:',e);return}
   activePrd=prdId||null;
   await loadRecommendations();
+  renderGlobal();
   if(!prdId){
     sts={};gts={};
     (W.steps||[]).forEach(s=>{sts[s.id]='pending'});
