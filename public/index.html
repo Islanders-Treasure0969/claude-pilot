@@ -204,21 +204,21 @@ function renderGlobal(){
 
 function renderSuggestions(){
   const bar=document.getElementById('sug-bar');
-  // Use server-provided suggestions, or defaults from workflow
+  // Show gate-based status (not substep names — those go in Actions Recommended)
   let suggestions=currentSuggestions||[];
   if(!activePrd&&(!suggestions||suggestions.length===0)){
     suggestions=(W.defaults&&W.defaults.suggestions)||[];
   }
-  if(suggestions.length===0){bar.classList.remove('show');return}
+  // Filter: only show gate status messages (type=info) and non-substep items
+  const gateItems=suggestions.filter(s=>s.type==='info'||/\d+\/\d+/.test(s.name)||/Blocked|Pending|Create|Update/.test(s.name));
+  if(gateItems.length===0){bar.classList.remove('show');return}
   bar.classList.add('show');
-  bar.innerHTML='<span class="sug-l">Suggested</span>';
-  suggestions.slice(0,3).forEach(s=>{
+  bar.innerHTML='<span class="sug-l">Status</span>';
+  gateItems.slice(0,3).forEach(s=>{
     const el=document.createElement('span');
-    el.className='sug-chip';
-    const badge=(s.type||'prompt')==='prompt'?'prompt':'bash';
-    el.innerHTML=`<span class="badge">${badge}</span>${h(s.name)}`;
-    el.onclick=(e)=>showSkillDetail(s,e,false);
-    attachSkillHover(el,s);
+    el.className='sug-chip'+(s.type==='info'?' info':'');
+    el.textContent=s.name;
+    el.title=s.desc||'';
     bar.appendChild(el);
   });
 }
