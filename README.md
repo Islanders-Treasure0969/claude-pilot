@@ -1,43 +1,85 @@
-# Claude Pilot
+# Claude Pilot v0.6.0
 
-Development cockpit for Claude Code. Visualize workflows, discover skills, and send commands to your Claude Code terminal — all from a browser UI.
+Development cockpit for Claude Code. Visualize workflows, discover skills, and send commands to your Claude Code terminal — all from a browser UI powered by cmux.
 
 ## Features
 
-- **Workflow Pipeline** — Visualize your development phases with real-time gate status
+### Workflow Management
+- **Pipeline Visualization** — Development phases with real-time gate evaluation
+- **Declarative Gates** — Define completion criteria in workflow.yml (checklist, keyword, file_exists, etc.)
 - **Substep Tracking** — Each phase has sub-processes with individual completion checks
-- **Skill Discovery** — Browse all available skills, commands, and subagents with descriptions
-- **Ctrl+K Command Palette** — Search across all skills instantly
-- **Send to Terminal** — Click a skill to send it directly to your Claude Code session (via cmux)
-- **Suggested Actions** — Context-aware suggestions based on current gate status
-- **Global Skills** — Categorized always-available skills (code review, security, architecture, etc.)
-- **Config Panel** — View hooks, plugins, subagents, CLAUDE.md status, unregistered skills
-- **cmux Integration** — Sidebar status, progress bar, auto-open browser pane
-- **PRD Tracking** — Select work items, auto-detect phase completion from file system
-- **Declarative Gates** — Define completion criteria in workflow.yml (no code changes needed)
-- **Scaffold** — Auto-generate workflow.yml by scanning your `.claude/` directory
+- **Phase Revert** — Go back to a previous phase with reason logging in feedback-log.md
+- **Autopilot** — Automatically execute substeps in sequence via cmux
+
+### Actions Panel (Exploit / Explore modes)
+- **Exploit mode** — Phase-aware skill recommendations based on workflow tags
+- **Explore mode** — Context-aware decision tree for guided problem-solving
+  - Drill down from "行き詰まってる" → "設計方針が定まらない" → CTA Interview
+  - 19 paths covering: stuck, retrospective, new task, code quality
+- **Ctrl+K Command Palette** — Search + intent fuzzy matching ("品質" → /simplify, /code-review)
+- **NEXT bar** — Context-aware next action suggestions (gate state + events + usage)
+
+### Exploration Tools (based on cognitive science research)
+- **CTA Interview** — Critical Decision Method for extracting tacit knowledge
+- **Retrospective** — Git log / PR pattern analysis
+- **WSP/ISP Classification** — Simon's problem structure analysis
+
+### Developer Experience
+- **Plugin Sync** — Auto-sync workflow.yml when plugins are installed/uninstalled
+- **Usage Analytics** — Track feature utilization, get suggestions for unused features
+- **Config Panel** — Hooks, plugins, prompts, analytics with onboarding guides
+- **Teams** — Create and run skill batches from UI (sequential or parallel)
+- **Prompt Library** — Save and reuse common prompts
+- **Hookify Integration** — Meta-cognitive stop hooks, development discipline rules
+
+### Architecture
+- **Worker Process** — cmux communication via separate process (stable with browser panes)
+- **Persistent Socket** — Direct Unix socket connection to cmux daemon
+- **68 tests** — 47 unit + 21 Playwright E2E
 
 ## Quick Start
 
+### 1. Install
+
 ```bash
-# Install
 npm install -g claude-pilot
-
-# In your project directory
-claude-pilot
-
-# Or specify project path
-claude-pilot --project /path/to/project
-
-# Custom port
-claude-pilot --port 3457
 ```
 
-Open `http://localhost:3456` in your browser.
+### 2. Initialize your project
 
-## Setup
+```bash
+cd your-project
 
-### 1. Create `.claude-pilot/workflow.yml`
+# Option A: Auto-generate workflow from .claude/ directory
+claude-pilot scaffold --output .claude-pilot/workflow.yml
+
+# Option B: Initialize with template
+claude-pilot init .
+```
+
+### 3. Start the server
+
+```bash
+# In a cmux terminal pane (required for Send to Terminal)
+claude-pilot
+```
+
+The dashboard opens automatically in cmux browser at `http://localhost:3456`.
+
+### 4. Select a PRD
+
+Create a work item directory and select it:
+
+```bash
+mkdir -p .local/prd/my-feature/requirements
+echo "- [x] Story defined" > .local/prd/my-feature/requirements/stories.md
+```
+
+Then select `my-feature` from the PRD dropdown in the dashboard.
+
+## Workflow Configuration
+
+### workflow.yml
 
 ```yaml
 name: "My Project"
@@ -49,51 +91,106 @@ global:
     - name: "Quality"
       skills:
         - name: "/simplify"
-          desc: "Code quality review and auto-fix"
+          desc: "Code quality review"
           type: prompt
+          selfContained: true    # Can run without arguments
 
 steps:
-  - id: design
-    label: "Design"
-    dir: "design"
+  - id: requirements
+    label: "Requirements"
+    dir: "requirements"
+    tags: [requirements, planning]   # For skill recommendations
     gate:
       rules:
         - type: checklist
-          file: "decisions.md"
+          file: "stories.md"
     substeps:
-      - id: analyze
-        name: "Analyze requirements"
-        desc: "Break down the feature requirements"
+      - id: stories
+        name: "Write user stories"
         type: prompt
         check:
           type: file_exists
-          file: "analysis.md"
+          file: "stories.md"
+
+  - id: design
+    label: "Design"
+    dir: "design"
+    tags: [design, architecture]
+    gate:
+      depends_on: [requirements]
+      rules:
+        - type: file_exists
+          file: "design.md"
+
+  - id: implement
+    label: "Implement"
+    dir: "implement"
+    tags: [implement, coding]
+    gate:
+      depends_on: [design]
+      rules:
+        - type: checklist
+          file: "tasks.md"
+
+  - id: review
+    label: "Review"
+    dir: "review"
+    tags: [review, quality]
+    gate:
+      depends_on: [implement]
+      rules:
+        - type: keyword
+          file: "review.md"
+          keyword: "PASS"
+
+teams:
+  - id: full-review
+    label: "Full Review"
+    mode: sequential
+    skills:
+      - /simplify
+      - /code-review
 ```
 
-Or let Claude Pilot generate one automatically:
+### Gate Rule Types
 
-```bash
-# Start without workflow.yml — it will offer to scaffold one
-claude-pilot
+| Type | Description | Parameters |
+|------|-------------|------------|
+| `checklist` | Count `[x]` / `[ ]` | `file`, `section?`, `optional?` |
+| `keyword` | Search for keyword | `file`, `keyword`, `fail_keyword?` |
+| `dir_file_keyword` | Check files in directory | `dir`, `keyword_pattern` |
+| `pattern_checklist` | Regex-matched checklist | `file`, `pattern`, `id_pattern?` |
+| `file_exists` | File existence | `file`, `optional?` |
+
+### Phase Tags
+
+Steps can have `tags` for skill recommendation matching:
+
+```yaml
+steps:
+  - id: review
+    tags: [review, quality, security]
 ```
 
-### 2. cmux Integration (Optional)
+Skills whose name or description contain these tags are recommended in that phase.
 
-If using cmux, start the server in a dedicated pane (not background):
+## cmux Integration
 
-```bash
-# In a cmux terminal pane
-claude-pilot --project /path/to/project
+Claude Pilot communicates with cmux via a **worker process** using direct Unix socket connections. This architecture ensures stable communication even when cmux browser panes are open.
+
+```
+Express Server ←→ stdin/stdout ←→ cmux-worker.js ←→ persistent socket ←→ cmux
 ```
 
-This enables:
-- **Send to Terminal** — Skills execute in your Claude Code session with full context
-- **Sidebar** — PRD, phase, and progress displayed in cmux sidebar
-- **Auto-open** — Browser pane opens automatically
+### Requirements
 
-### 3. Hooks (Optional)
+- [cmux](https://cmux.com) installed and running
+- Claude Code session in a cmux terminal pane
+- Environment variables: `CMUX_WORKSPACE_ID`, `CMUX_SURFACE_ID`, `CMUX_SOCKET_PATH`
 
-Add to `.claude/settings.local.json` to see Claude Code events in the dashboard:
+### Hooks (Optional)
+
+Add to `.claude/settings.local.json` for real-time event tracking:
 
 ```json
 {
@@ -105,38 +202,50 @@ Add to `.claude/settings.local.json` to see Claude Code events in the dashboard:
 }
 ```
 
-## Gate Rule Types
+## CLI Reference
 
-Define completion criteria declaratively in `workflow.yml`:
-
-| Type | Description | Key Parameters |
-|------|-------------|----------------|
-| `checklist` | Count `[x]` / `[ ]` in a file | `file`, `section?`, `optional?` |
-| `keyword` | Search for keyword in file | `file`, `keyword`, `fail_keyword?` |
-| `dir_file_keyword` | Check all files in directory | `dir`, `keyword_pattern` |
-| `pattern_checklist` | Regex-matched line checklist | `file`, `pattern`, `id_pattern?` |
-| `file_exists` | Check file existence | `file`, `optional?` |
-
-## CLI Options
+```bash
+claude-pilot                    # Start server (default)
+claude-pilot init [path]        # Initialize .claude-pilot/ directory
+claude-pilot scaffold [path]    # Auto-generate workflow.yml from .claude/
+claude-pilot status             # Show server, workflow, PRD status
+claude-pilot --help             # Show help
+claude-pilot --version          # Show version
+```
 
 | Option | Default | Description |
 |--------|---------|-------------|
 | `--project` | Current directory | Project root path |
 | `--port` | `3456` | Server port |
 | `--prd-root` | `.local/prd` | Work item directory |
-| `--state-dir` | `.local/claude_pilot/state` | State persistence directory |
+| `--state-dir` | `.local/claude_pilot/state` | State persistence |
+| `--open` | false | Open browser on startup |
 
-## Architecture
+## Project Structure
 
 ```
 claude-pilot/
-  cli.js            # CLI entry point
-  server.js         # Express server (~720 lines)
-  gate-engine.js    # Declarative gate evaluator
-  scanner.js        # .claude/ directory scanner
-  cmux-bridge.js    # cmux CLI wrapper
+  cli.js              # CLI entry point
+  server.js           # Express server + API
+  gate-engine.js      # Declarative gate evaluator
+  scanner.js          # .claude/ skill scanner + scaffold
+  cmux-bridge.js      # cmux communication (worker-based)
+  cmux-worker.js      # Separate process for cmux socket
   public/
-    index.html      # SPA frontend
+    index.html        # SPA frontend
+    style.css         # Styles
+  test/               # Unit tests (47)
+  e2e/                # Playwright E2E tests (21)
+  .claude-pilot/
+    workflow.yml      # App's own workflow (dog fooding)
+```
+
+## Testing
+
+```bash
+npm test              # Unit tests (gate-engine, scanner, cmux-bridge)
+npm run test:e2e      # Playwright browser tests
+npm run test:all      # Both
 ```
 
 ## License
