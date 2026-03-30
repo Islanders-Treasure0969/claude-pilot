@@ -257,10 +257,14 @@ function renderGlobal(){
       addBtn.onclick=createTeamDialog;grid.appendChild(addBtn);
     }
     if(rec.other.length>0){
-      const details=document.createElement('details');
-      details.className='skills-collapse';
-      details.innerHTML='<summary class="gb-cat" style="cursor:pointer">All Skills ('+rec.other.length+')</summary>';
-      const inner=document.createElement('div');inner.style.marginTop='6px';
+      const hdr=document.createElement('div');hdr.className='gb-cat';hdr.style.cursor='pointer';
+      hdr.textContent='▶ All Skills ('+rec.other.length+')';
+      const inner=document.createElement('div');inner.style.marginTop='6px';inner.style.display='none';
+      hdr.onclick=()=>{
+        const open=inner.style.display!=='none';
+        inner.style.display=open?'none':'block';
+        hdr.textContent=(open?'▶':'▼')+' All Skills ('+rec.other.length+')';
+      };
       // Group by category from workflow.yml
       const cats=W.global?.categories||[];
       const otherNames=new Set(rec.other.map(s=>s.name));
@@ -281,20 +285,14 @@ function renderGlobal(){
         uncategorized.forEach(s=>catGrid.appendChild(createSkillChip(s,'gsk dimmed')));
         inner.appendChild(catGrid);
       }
-      details.appendChild(inner);
-      grid.appendChild(details);
+      grid.appendChild(hdr);
+      grid.appendChild(inner);
     }
   }else{
-    // EXPLORATION MODE: Context-aware exploration tools
+    // EXPLORATION MODE: Decision tree + tools
+    renderDecisionTree(grid);
+
     const lbl=document.createElement('span');lbl.className='gb-cat';lbl.textContent='Exploration Tools';grid.appendChild(lbl);
-
-    // Show hint for first-time explore users
-    {
-      const hint=document.createElement('div');hint.className='gb-health';
-      hint.textContent='i 振り返り・分析・暗黙知の引き出しに使えるツールです';
-      grid.appendChild(hint);
-    }
-
     rec.explore.forEach(s=>grid.appendChild(createSkillChip(s,'gsk explore')));
   }
   const count=currentMode==='exploitation'?rec.recommended.length+rec.other.length:rec.explore.length;
