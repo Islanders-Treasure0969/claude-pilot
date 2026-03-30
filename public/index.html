@@ -281,9 +281,17 @@ function renderGlobal(){
       grid.appendChild(details);
     }
   }else{
-    // EXPLORATION MODE: Decision tree first, then tools
-    renderDecisionTree(grid);
+    // EXPLORATION MODE: Context-aware exploration tools
     const lbl=document.createElement('span');lbl.className='gb-cat';lbl.textContent='Exploration Tools';grid.appendChild(lbl);
+
+    // Show contextual hints based on usage
+    const usedCount=Object.values(recommendations?.other||{}).length;
+    if((usageCounters?.explore_mode||0)===0){
+      const hint=document.createElement('div');hint.className='gb-health';
+      hint.textContent='i Explore モードでは振り返り・分析・暗黙知の引き出しができます';
+      grid.appendChild(hint);
+    }
+
     rec.explore.forEach(s=>grid.appendChild(createSkillChip(s,'gsk explore')));
   }
   const count=currentMode==='exploitation'?rec.recommended.length+rec.other.length:rec.explore.length;
@@ -292,21 +300,27 @@ function renderGlobal(){
 
 function renderSuggestions(){
   const bar=document.getElementById('sug-bar');
-  // Show gate-based status (not substep names — those go in Actions Recommended)
   let suggestions=currentSuggestions||[];
   if(!activePrd&&(!suggestions||suggestions.length===0)){
     suggestions=(W.defaults&&W.defaults.suggestions)||[];
   }
-  // Filter: only show gate status messages (type=info) and non-substep items
-  const gateItems=suggestions.filter(s=>s.type==='info'||/\d+\/\d+/.test(s.name)||/Blocked|Pending|Create|Update/.test(s.name));
-  if(gateItems.length===0){bar.classList.remove('show');return}
+  if(suggestions.length===0){bar.classList.remove('show');return}
   bar.classList.add('show');
-  bar.innerHTML='<span class="sug-l">Status</span>';
-  gateItems.slice(0,3).forEach(s=>{
+  bar.innerHTML='<span class="sug-l">Next</span>';
+  suggestions.slice(0,3).forEach(s=>{
     const el=document.createElement('span');
-    el.className='sug-chip'+(s.type==='info'?' info':'');
+    const isAction=s.type==='prompt'||s.type==='bash'||s.selfContained;
+    el.className='sug-chip'+(isAction?' action':' info');
     el.textContent=s.name;
-    el.title=s.desc||'';
+    el.title=(s.reason?s.reason+' — ':'')+( s.desc||'');
+    if(isAction){
+      el.style.cursor='pointer';
+      el.onclick=()=>{
+        document.getElementById('cmd-i').value=s.prompt||s.name;
+        if(s.selfContained)runCommand();
+        else document.getElementById('cmd-i').focus();
+      };
+    }
     bar.appendChild(el);
   });
 }

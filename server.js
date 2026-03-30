@@ -235,53 +235,68 @@ function getCurrentPhase(statuses) {
 
 function resolveSuggestions(statuses, gateDetails) {
   const steps = workflow.steps || [];
-  let activeStep = steps.find(s => statuses[s.id] === "active");
-  if (!activeStep) activeStep = steps.find(s => statuses[s.id] === "pending");
-  if (!activeStep) {
-    // All done
-    if (Object.values(statuses).every(v => v === "done")) {
-      return [{ name: "All phases complete!", desc: "Consider creating a PR or starting a new PRD", type: "info" }];
-    }
-    return [];
+  const activeStep = steps.find(s => statuses[s.id] === "active") || steps.find(s => statuses[s.id] === "pending");
+  const actions = []; // { name, desc, type, priority, reason }
+
+  // All done
+  if (!activeStep && Object.values(statuses).every(v => v === "done")) {
+    actions.push({ name: "All phases complete!", desc: "Create a PR or start a new PRD", type: "info", priority: 0, reason: "全フェーズ完了" });
+    // Suggest retrospective
+    actions.push({ name: "Retrospective", desc: "振り返りでパターンを分析", type: "prompt", priority: 1, reason: "完了後の振り返り推奨",
+      prompt: "過去1ヶ月のgit logとPRを分析して、手戻りパターンと改善点を報告してください。" });
+    return actions.slice(0, 3);
   }
+  if (!activeStep) return [];
 
-  // Smart suggestions based on gate details
+  // 1. Gate-based actions (highest priority)
   const details = gateDetails[activeStep.id] || [];
-  const suggestions = [];
-
   for (const detail of details) {
     if (!detail || detail.state === "complete" || detail.state === "skipped") continue;
-
     if (detail.state === "blocked") {
-      const blockers = (detail.blockedBy || []).map(id => {
-        const s = steps.find(st => st.id === id);
-        return s ? s.label : id;
-      });
-      suggestions.push({ name: `Blocked by: ${blockers.join(", ")}`, desc: "Complete the prerequisite phases first", type: "info" });
+      const blockers = (detail.blockedBy || []).map(id => (steps.find(st => st.id === id)?.label || id));
+      actions.push({ name: `Blocked: ${blockers.join(", ")}`, desc: "先にこのフェーズを完了してください", type: "info", priority: 0, reason: "依存関係" });
     } else if (detail.state === "file_missing") {
-      suggestions.push({ name: `Create the required file to proceed`, desc: "Check the gate rule for the expected file name", type: "prompt" });
-    } else if (detail.state === "precursor_missing") {
-      suggestions.push({ name: `Set up the prerequisite file first`, desc: "The precursor file hasn't been created yet", type: "prompt" });
+      actions.push({ name: "Required file missing", desc: "Gate に必要なファイルを作成してください", type: "prompt", priority: 1, reason: "Gate 条件" });
     } else if (detail.state === "incomplete" && detail.total > 0) {
-      const remaining = (detail.unchecked || detail.total - (detail.checked || detail.done || 0));
-      suggestions.push({ name: `${detail.checked || detail.done || 0}/${detail.total} done — ${remaining} remaining`, desc: "Complete the remaining checklist items", type: "prompt" });
-      if (detail.pending && Array.isArray(detail.pending)) {
-        suggestions.push({ name: `Pending: ${detail.pending.slice(0, 3).join(", ")}`, desc: "These items need attention", type: "info" });
-      }
-    } else if (detail.state === "incomplete") {
-      suggestions.push({ name: `Update the gate file to proceed`, desc: "The gate condition is not yet satisfied", type: "prompt" });
+      const done = detail.checked || detail.done || 0;
+      const remaining = detail.total - done;
+      actions.push({ name: `${done}/${detail.total} — あと${remaining}項目`, desc: "チェックリストを完了してください", type: "info", priority: 1, reason: "Gate 進捗" });
     }
   }
 
-  // If no gate-based suggestions, fall back to substeps
-  if (suggestions.length === 0) {
-    const substeps = activeStep.substeps || [];
-    if (substeps.length > 0) return substeps.slice(0, 2).map(ss => ({ name: ss.name, desc: ss.desc, type: ss.type }));
-    const skills = activeStep.skills || [];
-    return skills.slice(0, 2);
+  // 2. Next substep (if gate actions didn't cover it)
+  if (activeStep.substeps?.length > 0 && actions.length < 2) {
+    const ssStatuses = activePrdId ? evaluateSubsteps(path.join(PRD_ROOT, activePrdId, activeStep.dir || activeStep.id), activeStep.substeps) : [];
+    const nextSs = ssStatuses.find(s => s.status !== "done") || activeStep.substeps[0];
+    if (nextSs) {
+      const ss = activeStep.substeps.find(s => s.id === nextSs.id) || activeStep.substeps[0];
+      actions.push({ name: ss.name, desc: ss.desc || "", type: ss.type || "prompt", priority: 2, reason: `${activeStep.label} の次のステップ` });
+    }
   }
 
-  return suggestions.slice(0, 3);
+  // 3. Context-based suggestions (from recent events and usage)
+  const recentEvents = [...(sessions.get("default")?.events || [])].slice(-10);
+  const lastEvent = recentEvents[recentEvents.length - 1];
+
+  // After a Stop event, suggest commit or review
+  if (lastEvent?.hookEvent === "Stop" && actions.length < 3) {
+    actions.push({ name: "git commit", desc: "変更をコミット", type: "bash", priority: 3, reason: "タスク完了後" });
+  }
+
+  // If many Write/Edit events recently, suggest /simplify
+  const writeCount = recentEvents.filter(e => ["Write", "Edit", "MultiEdit"].includes(e.tool)).length;
+  if (writeCount >= 3 && actions.length < 3) {
+    actions.push({ name: "/simplify", desc: "変更コードの品質レビュー", type: "prompt", priority: 3, reason: `${writeCount}回のファイル変更後`, selfContained: true });
+  }
+
+  // Unused feature suggestions (low priority)
+  if (actions.length < 3 && (usageCounters.explore_mode || 0) === 0) {
+    actions.push({ name: "Explore モードを試す", desc: "振り返り・分析ツールが利用可能", type: "info", priority: 5, reason: "未使用機能" });
+  }
+
+  // Sort by priority and return top 3
+  actions.sort((a, b) => a.priority - b.priority);
+  return actions.slice(0, 3);
 }
 
 function getPrdSummary(prdId) {
