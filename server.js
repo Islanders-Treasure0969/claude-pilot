@@ -655,7 +655,43 @@ const DECISION_TREE = {
   ],
 };
 
-app.get("/api/decision-tree", (_r, res) => res.json(DECISION_TREE));
+app.get("/api/decision-tree", (_r, res) => {
+  // Build context-aware decision tree
+  const tree = JSON.parse(JSON.stringify(DECISION_TREE)); // deep copy
+
+  // Add context-based options
+  const steps = workflow.steps || [];
+  const activeStep = activePrdId ? steps.find(s => {
+    const { statuses } = detectPhaseStatus(activePrdId);
+    return statuses[s.id] === "active";
+  }) : null;
+
+  // If in a specific phase, add phase-specific option
+  if (activeStep) {
+    tree.options.unshift({
+      label: `${activeStep.label} フェーズを進める`,
+      next: {
+        question: `${activeStep.label} で何をする？`,
+        options: [
+          ...(activeStep.substeps || []).slice(0, 3).map(ss => ({
+            label: ss.name, action: { type: "skill", name: ss.name, prompt: ss.name }
+          })),
+          { label: "Autopilot で自動実行", action: { type: "autopilot" } },
+        ],
+      },
+    });
+  }
+
+  // If no PRD selected, suggest PRD selection first
+  if (!activePrdId) {
+    tree.options.unshift({
+      label: "PRD を選択して作業を始める",
+      action: { type: "info", name: "PRD selector", prompt: "ヘッダーのドロップダウンから PRD を選択してください" },
+    });
+  }
+
+  res.json(tree);
+});
 
 // ── Teams CRUD ──────────────────────────────────
 

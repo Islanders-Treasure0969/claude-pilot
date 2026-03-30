@@ -289,12 +289,10 @@ function renderGlobal(){
       grid.appendChild(inner);
     }
   }else{
-    // EXPLORATION MODE: Guide user to Ctrl+K + show tools
-    const guide=document.createElement('div');guide.className='gb-health';
-    guide.textContent='Ctrl+K で「行き詰まってる」「振り返りたい」等と入力すると、最適なツールが提案されます';
-    grid.appendChild(guide);
+    // EXPLORATION MODE: Context-aware decision tree + tools
+    renderDecisionTree(grid);
 
-    const lbl=document.createElement('span');lbl.className='gb-cat';lbl.textContent='Exploration Tools';grid.appendChild(lbl);
+    const lbl=document.createElement('span');lbl.className='gb-cat';lbl.textContent='Tools';grid.appendChild(lbl);
     rec.explore.forEach(s=>grid.appendChild(createSkillChip(s,'gsk explore')));
   }
   const count=currentMode==='exploitation'?rec.recommended.length+rec.other.length:rec.explore.length;
