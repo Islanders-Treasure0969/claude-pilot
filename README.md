@@ -1,5 +1,7 @@
 # Claude Pilot v0.6.0
 
+[日本語版はこちら / Japanese README](README.ja.md)
+
 Development cockpit for Claude Code. Visualize workflows, discover skills, and send commands to your Claude Code terminal — all from a browser UI powered by cmux.
 
 ## Features
