@@ -131,13 +131,16 @@ let globalPanelOpen=false;
 let currentMode='exploitation';
 let recommendations=null;
 
-function toggleMode(){
+async function toggleMode(){
   currentMode=currentMode==='exploitation'?'exploration':'exploitation';
   const btn=document.getElementById('mode-toggle');
   btn.textContent=currentMode==='exploitation'?'Exploit':'Explore';
   btn.classList.toggle('explore-mode',currentMode==='exploration');
+  if(currentMode==='exploration') trackUsage('explore_mode');
+  if(!recommendations) await loadRecommendations();
   renderGlobal();
 }
+function trackUsage(feature){fetch('/api/debug',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({msg:'usage',data:{feature}})}).catch(()=>{})}
 
 async function loadRecommendations(){
   try{recommendations=await(await fetch('/api/recommendations')).json()}catch{recommendations=null}
@@ -211,6 +214,7 @@ function renderGlobal(){
   const grid=document.getElementById('global-grid');
   const toggle=document.getElementById('gb-toggle');
   grid.innerHTML='';
+  dbg('renderGlobal',{hasRec:!!recommendations,mode:currentMode,exploreCount:recommendations?.explore?.length||0});
   if(!recommendations){
     const g=W.global;
     if(!g||!(g.skills||[]).length){toggle.style.display='none';return}
@@ -284,11 +288,10 @@ function renderGlobal(){
     // EXPLORATION MODE: Context-aware exploration tools
     const lbl=document.createElement('span');lbl.className='gb-cat';lbl.textContent='Exploration Tools';grid.appendChild(lbl);
 
-    // Show contextual hints based on usage
-    const usedCount=Object.values(recommendations?.other||{}).length;
-    if((usageCounters?.explore_mode||0)===0){
+    // Show hint for first-time explore users
+    {
       const hint=document.createElement('div');hint.className='gb-health';
-      hint.textContent='i Explore モードでは振り返り・分析・暗黙知の引き出しができます';
+      hint.textContent='i 振り返り・分析・暗黙知の引き出しに使えるツールです';
       grid.appendChild(hint);
     }
 
