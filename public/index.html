@@ -197,7 +197,6 @@ function handleDtAction(action){
   if(action.type==='skill'){
     document.getElementById('cmd-i').value=action.prompt||action.name;
     appendOutput('> '+action.name+'\n','tool');
-    appendOutput('(Unknown skill の場合は Claude Code セッションを /exit → 再起動してください)\n','info');
     runCommand();
   }else if(action.type==='mode'){
     currentMode=action.value==='exploration'?'exploration':'exploitation';
