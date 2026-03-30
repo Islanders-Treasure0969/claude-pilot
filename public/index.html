@@ -254,8 +254,27 @@ function renderGlobal(){
       const details=document.createElement('details');
       details.className='skills-collapse';
       details.innerHTML='<summary class="gb-cat" style="cursor:pointer">All Skills ('+rec.other.length+')</summary>';
-      const inner=document.createElement('div');inner.className='gb-grid';inner.style.marginTop='6px';
-      rec.other.forEach(s=>inner.appendChild(createSkillChip(s,'gsk dimmed')));
+      const inner=document.createElement('div');inner.style.marginTop='6px';
+      // Group by category from workflow.yml
+      const cats=W.global?.categories||[];
+      const otherNames=new Set(rec.other.map(s=>s.name));
+      const shown=new Set();
+      cats.forEach(cat=>{
+        const catSkills=rec.other.filter(s=>(cat.skills||[]).some(cs=>cs.name===s.name)&&!shown.has(s.name));
+        if(catSkills.length===0)return;
+        const catLbl=document.createElement('div');catLbl.className='gb-subcat';catLbl.textContent=cat.name;inner.appendChild(catLbl);
+        const catGrid=document.createElement('div');catGrid.className='gb-grid';
+        catSkills.forEach(s=>{shown.add(s.name);catGrid.appendChild(createSkillChip(s,'gsk dimmed'))});
+        inner.appendChild(catGrid);
+      });
+      // Uncategorized
+      const uncategorized=rec.other.filter(s=>!shown.has(s.name));
+      if(uncategorized.length>0){
+        const catLbl=document.createElement('div');catLbl.className='gb-subcat';catLbl.textContent='Other';inner.appendChild(catLbl);
+        const catGrid=document.createElement('div');catGrid.className='gb-grid';
+        uncategorized.forEach(s=>catGrid.appendChild(createSkillChip(s,'gsk dimmed')));
+        inner.appendChild(catGrid);
+      }
       details.appendChild(inner);
       grid.appendChild(details);
     }

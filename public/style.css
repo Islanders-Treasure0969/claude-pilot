@@ -85,6 +85,9 @@ body{font-family:var(--m);background:var(--bg);color:var(--tx);height:100vh;disp
 .skills-collapse summary::-webkit-details-marker{display:none}
 .skills-collapse[open] .gb-grid{display:flex;flex-wrap:wrap;gap:6px}
 
+/* Sub-category in All Skills */
+.gb-subcat{font-size:8px;text-transform:uppercase;letter-spacing:1px;color:var(--txd);padding:6px 0 2px;font-weight:500}
+
 /* Revert button */
 .revert-btn{font-family:var(--m);font-size:9px;padding:4px 12px;margin-top:10px;border-radius:var(--radius);border:1px solid var(--r);color:var(--r);background:none;cursor:pointer;transition:all .12s}
 .revert-btn:hover{background:rgba(248,81,73,.1)}
