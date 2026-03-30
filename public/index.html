@@ -519,6 +519,18 @@ function openSp(id){
   const skEl=document.getElementById('sp-sk');
   skEl.innerHTML='';
 
+  // Show past revert reasons for this phase
+  fetch('/api/phase/feedback-log').then(r=>r.json()).then(d=>{
+    if(!d.log)return;
+    const regex=new RegExp('## Revert to '+step.label+'[\\s\\S]*?(?=## Revert|$)','g');
+    const matches=d.log.match(regex);
+    if(matches&&matches.length>0){
+      const warn=document.createElement('div');warn.className='sp-revert-history';
+      warn.textContent='Past reverts ('+matches.length+'): '+matches[matches.length-1].split('**Reason:**')[1]?.trim().split('\n')[0]||'';
+      skEl.prepend(warn);
+    }
+  }).catch(()=>{});
+
   // Render substeps as mini-pipeline if available
   const substeps=step.substeps||[];
   const ssStatuses=substepSts[step.id]||[];
