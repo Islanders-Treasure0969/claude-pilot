@@ -192,11 +192,13 @@ function renderDecisionTree(container){
   container.appendChild(wrap);
 }
 
-function handleDtAction(action){
+async function handleDtAction(action){
   fetch('/api/debug',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({msg:'dt-action',data:{type:action.type,name:action.name||''}})}).catch(()=>{});
   if(action.type==='skill'){
     document.getElementById('cmd-i').value=action.prompt||action.name;
     appendOutput('> '+action.name+'\n','tool');
+    // Small delay to allow Claude Code's plugin system to settle
+    await new Promise(r=>setTimeout(r,500));
     runCommand();
   }else if(action.type==='mode'){
     currentMode=action.value==='exploration'?'exploration':'exploitation';
