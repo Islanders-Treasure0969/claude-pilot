@@ -241,6 +241,9 @@ body{font-family:var(--m);background:var(--bg);color:var(--tx);height:100vh;disp
 .palette-item .pi-desc{color:var(--txd);font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
 .palette-item .pi-phase{font-size:8px;color:var(--pp);border:1px solid rgba(188,140,255,.2);padding:2px 6px;border-radius:var(--radius);white-space:nowrap}
 .palette-item .pi-badge{font-size:7px;text-transform:uppercase;padding:2px 5px;border-radius:3px;background:rgba(255,255,255,.06);color:var(--txd)}
+.palette-item.recommended{border-left:3px solid var(--gn);background:rgba(63,185,80,.04)}
+.palette-item.explore{border-left:3px solid var(--pu);background:rgba(188,140,255,.04)}
+.palette-item .pi-reason{font-size:8px;color:var(--gn);white-space:nowrap}
 .palette-empty{padding:20px;text-align:center;color:var(--txd);font-size:11px}
 
 /* ─── Config panel ───────────────────────────── */

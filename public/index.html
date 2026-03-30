@@ -289,8 +289,10 @@ function renderGlobal(){
       grid.appendChild(inner);
     }
   }else{
-    // EXPLORATION MODE: Decision tree + tools
-    renderDecisionTree(grid);
+    // EXPLORATION MODE: Guide user to Ctrl+K + show tools
+    const guide=document.createElement('div');guide.className='gb-health';
+    guide.textContent='Ctrl+K で「行き詰まってる」「振り返りたい」等と入力すると、最適なツールが提案されます';
+    grid.appendChild(guide);
 
     const lbl=document.createElement('span');lbl.className='gb-cat';lbl.textContent='Exploration Tools';grid.appendChild(lbl);
     rec.explore.forEach(s=>grid.appendChild(createSkillChip(s,'gsk explore')));
@@ -820,25 +822,70 @@ function h(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/
 /* Command Palette */
 let paletteOpen=false,paletteItems=[],paletteIdx=-1;
 
+// Intent keywords for fuzzy matching natural language to skills
+const INTENT_MAP=[
+  {intents:['行き詰','stuck','困って','わからない'],skills:['WSP/ISP Classification','CTA Interview']},
+  {intents:['振り返','retrospect','review','反省'],skills:['Retrospective','CTA Interview']},
+  {intents:['品質','quality','レビュー','simplify'],skills:['/simplify','/code-review']},
+  {intents:['設計','design','アーキ','architect'],skills:['CTA Interview','WSP/ISP Classification']},
+  {intents:['テスト','test','バグ','bug','error'],skills:['/code-review','/simplify']},
+  {intents:['新しい','new','始め','start'],skills:['WSP/ISP Classification']},
+];
+
 function buildPaletteItems(){
   const items=[];
-  // Global skills
+
+  // 1. Recommended (from NEXT actions) — always at top
+  if(currentSuggestions&&currentSuggestions.length>0){
+    currentSuggestions.forEach(s=>{
+      items.push({...s,phase:'★ Recommended',reason:s.reason||'',_isRecommended:true});
+    });
+  }
+
+  // 2. Explore tools
+  if(recommendations&&recommendations.explore){
+    recommendations.explore.forEach(s=>{
+      items.push({...s,phase:'Explore',_isExplore:true});
+    });
+  }
+
+  // 3. Global skills
   const g=W.global||{};
   (g.categories||[]).forEach(cat=>{
     (cat.skills||[]).forEach(s=>{
       items.push({...s,phase:'Global: '+cat.name});
     });
   });
-  // Phase substeps + legacy skills
+  // 4. Phase substeps
   (W.steps||[]).forEach(step=>{
     (step.substeps||[]).forEach(ss=>{
       items.push({name:ss.name,desc:ss.desc||'',type:ss.type||'prompt',phase:step.label});
     });
-    (step.skills||[]).forEach(s=>{
-      items.push({...s,phase:step.label});
-    });
   });
   return items;
+}
+
+function intentMatch(query,items){
+  const q=query.toLowerCase();
+  // Check intent keywords
+  const matchedSkills=new Set();
+  INTENT_MAP.forEach(m=>{
+    if(m.intents.some(i=>q.includes(i))){
+      m.skills.forEach(s=>matchedSkills.add(s));
+    }
+  });
+  if(matchedSkills.size>0){
+    // Boost matched skills to top
+    const boosted=items.filter(i=>matchedSkills.has(i.name));
+    const rest=items.filter(i=>!matchedSkills.has(i.name)&&(
+      i.name.toLowerCase().includes(q)||(i.desc||'').toLowerCase().includes(q)||(i.phase||'').toLowerCase().includes(q)
+    ));
+    return[...boosted,...rest];
+  }
+  // Normal fuzzy match
+  return items.filter(i=>
+    i.name.toLowerCase().includes(q)||(i.desc||'').toLowerCase().includes(q)||(i.phase||'').toLowerCase().includes(q)
+  );
 }
 
 function openPalette(){
@@ -857,19 +904,15 @@ function closePalette(){
 
 function renderPaletteList(query){
   const list=document.getElementById('palette-list');
-  const q=query.toLowerCase();
-  const filtered=q?paletteItems.filter(i=>
-    i.name.toLowerCase().includes(q)||
-    (i.desc||'').toLowerCase().includes(q)||
-    (i.phase||'').toLowerCase().includes(q)
-  ):paletteItems;
+  const filtered=query?intentMatch(query,paletteItems):paletteItems;
   if(filtered.length===0){list.innerHTML='<div class="palette-empty">No matching skills</div>';return}
   list.innerHTML='';
   filtered.slice(0,15).forEach((item,i)=>{
     const el=document.createElement('div');
-    el.className='palette-item'+(i===paletteIdx?' sel':'');
+    el.className='palette-item'+(i===paletteIdx?' sel':'')+(item._isRecommended?' recommended':'')+(item._isExplore?' explore':'');
     const badge=(item.type||'prompt')==='prompt'?'prompt':'bash';
-    el.innerHTML=`<span class="pi-badge">${badge}</span><span class="pi-name">${h(item.name)}</span><span class="pi-desc">${h(item.desc||'')}</span><span class="pi-phase">${h(item.phase||'')}</span>`;
+    const reason=item.reason?'<span class="pi-reason">'+h(item.reason)+'</span>':'';
+    el.innerHTML=`<span class="pi-badge">${badge}</span><span class="pi-name">${h(item.name)}</span><span class="pi-desc">${h(item.desc||'')}</span>${reason}<span class="pi-phase">${h(item.phase||'')}</span>`;
     el.onclick=()=>{closePalette();showSkillDetail(item,el,false)};
     list.appendChild(el);
   });
