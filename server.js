@@ -615,7 +615,13 @@ const DECISION_TREE = {
         options: [
           { label: "同じエラーが繰り返し出る", action: { type: "skill", name: "WSP/ISP Classification", prompt: "今取り組んでいる問題について分析してください。Simon (1973) の分類に基づいて：1. 初期状態は明確か？ 2. 目標状態は明確か？ 3. 操作（解法）は明確か？ ISPの場合、well-structuredなサブ問題に分解する方法を提案してください。" } },
           { label: "設計方針が定まらない", action: { type: "skill", name: "CTA Interview", prompt: "あなたはCognitive Task Analysisのインタビュアーです。私が最近経験した困難な技術的判断について、Critical Decision Methodに基づいてインタビューしてください。" } },
-          { label: "何をすべきかわからない", action: { type: "mode", value: "exploration" } },
+          { label: "何をすべきかわからない", next: {
+            question: "どんなヘルプが必要？",
+            options: [
+              { label: "問題を整理したい", action: { type: "skill", name: "WSP/ISP Classification", prompt: "今の状況を整理してください。何が分かっていて、何が不明確かを明示化し、次のアクションを3つ提案してください。" } },
+              { label: "過去の経験から学びたい", action: { type: "skill", name: "Retrospective", prompt: "過去のgit logから似た状況でどう対応したかを分析し、今回に活かせるパターンを報告してください。" } },
+            ],
+          }},
         ],
       },
     },
@@ -637,7 +643,14 @@ const DECISION_TREE = {
         options: [
           { label: "やることが明確（手順が決まってる）", action: { type: "autopilot" } },
           { label: "やることが不明確（調査や設計が必要）", action: { type: "skill", name: "WSP/ISP Classification", prompt: "これから取り組むタスクについて、well-structuredかill-structuredかを判定し、適切なアプローチを提案してください。" } },
-          { label: "既存の問題を改善したい", action: { type: "mode", value: "exploration" } },
+          { label: "既存の問題を改善したい", next: {
+            question: "どんな改善？",
+            options: [
+              { label: "手戻りやバグのパターンを分析", action: { type: "skill", name: "Retrospective", prompt: "過去1ヶ月のgit logとPRを分析して、手戻りパターン、繰り返しバグ、Skill化すべきパターンを報告してください。" } },
+              { label: "設計判断を見直したい", action: { type: "skill", name: "CTA Interview", prompt: "あなたはCognitive Task Analysisのインタビュアーです。改善したい設計判断について深掘りしてください。" } },
+              { label: "コード品質を上げたい", action: { type: "skill", name: "/simplify", prompt: "/simplify" } },
+            ],
+          }},
         ],
       },
     },
