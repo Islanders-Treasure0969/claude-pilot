@@ -631,6 +631,34 @@ const DECISION_TREE = {
 
 app.get("/api/decision-tree", (_r, res) => res.json(DECISION_TREE));
 
+// ── Teams CRUD ──────────────────────────────────
+
+app.post("/api/teams/create", (req, res) => {
+  const { label, skills, mode } = req.body;
+  if (!label || !skills || !Array.isArray(skills) || skills.length === 0) {
+    return res.status(400).json({ error: "label and skills array required" });
+  }
+  const id = label.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+  const team = { id, label, desc: `${skills.length} skills (${mode || "sequential"})`, mode: mode || "sequential", skills };
+
+  // Add to in-memory workflow
+  if (!workflow.teams) workflow.teams = [];
+  workflow.teams.push(team);
+
+  // Persist to workflow.yml
+  try {
+    const raw = yaml.load(fs.readFileSync(WORKFLOW_FILE, "utf-8"));
+    if (!raw.teams) raw.teams = [];
+    raw.teams.push({ id, label, desc: team.desc, mode: team.mode, skills });
+    fs.writeFileSync(WORKFLOW_FILE, yaml.dump(raw, { lineWidth: 120, noRefs: true }));
+    broadcast({ type: "workflow", workflow: safeWorkflow() });
+    addEvent("default", "Team", `Created: ${label}`);
+    res.json({ ok: true, team });
+  } catch (e) {
+    res.status(500).json({ error: "Failed to save: " + e.message });
+  }
+});
+
 // ── Phase Revert (手戻り対応) ────────────────────
 
 app.post("/api/phase/revert", (req, res) => {

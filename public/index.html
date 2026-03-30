@@ -249,6 +249,8 @@ function renderGlobal(){
         el.textContent=(t.mode||'seq')+' '+t.label;el.title=t.desc||'';
         el.onclick=()=>runTeam(t.id,t.label,t.desc);grid.appendChild(el);
       });
+      const addBtn=document.createElement('button');addBtn.className='team-add';addBtn.textContent='+ New Team';
+      addBtn.onclick=createTeamDialog;grid.appendChild(addBtn);
     }
     if(rec.other.length>0){
       const details=document.createElement('details');
@@ -1089,6 +1091,19 @@ function sendSkill(name){
   document.getElementById('cmd-i').value=name;
   appendOutput(`> ${name}\n`,'tool');
   runCommand();
+}
+
+async function createTeamDialog(){
+  const name=prompt('Team name:');if(!name)return;
+  const skillsStr=prompt('Skills (comma separated, e.g. /simplify, /code-review):');if(!skillsStr)return;
+  const skills=skillsStr.split(',').map(s=>s.trim()).filter(Boolean);
+  const mode=confirm('Parallel execution? (OK=parallel, Cancel=sequential)')?'parallel':'sequential';
+  try{
+    const res=await postJson('/api/teams/create',{label:name,skills,mode});
+    const data=await res.json();
+    if(data.ok){appendOutput('Team created: '+name+'\n','done');renderGlobal()}
+    else appendOutput('Error: '+data.error+'\n','err');
+  }catch(e){appendOutput('Error: '+e.message+'\n','err')}
 }
 
 async function runTeam(teamId,label,desc){

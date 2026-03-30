@@ -98,6 +98,8 @@ body{font-family:var(--m);background:var(--bg);color:var(--tx);height:100vh;disp
 /* Team chips */
 .team-chip{font-family:var(--m);font-size:10px;padding:5px 12px;border-radius:var(--radius);border:1px solid var(--or);background:var(--orb);color:var(--or);cursor:pointer;transition:all .12s;white-space:nowrap;display:flex;align-items:center;gap:6px}
 .team-chip:hover{background:rgba(210,153,34,.15)}
+.team-add{font-family:var(--m);font-size:9px;padding:4px 10px;border-radius:var(--radius);border:1px dashed var(--bd);color:var(--txd);background:none;cursor:pointer}
+.team-add:hover{border-color:var(--or);color:var(--or)}
 .team-chip .badge{font-size:7px;text-transform:uppercase;padding:1px 4px;border-radius:3px;background:rgba(255,255,255,.06);color:var(--txd)}
 
 /* ─── Skill popover ──────────────────────────── */
