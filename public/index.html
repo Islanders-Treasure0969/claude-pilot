@@ -1003,6 +1003,7 @@ function renderConfig(){
   });
   html+=`</div>`;
   html+=`<div class="cfg-section"><div class="cfg-section-title">Marketplace</div>`;
+  html+=`<div class="enterprise-toggle" id="enterprise-toggle"></div>`;
   html+=`<input class="plugin-filter" id="plugin-filter" placeholder="Search plugins..." oninput="filterPlugins(this.value)">`;
   html+=`<div id="plugin-list">Loading...</div></div>`;
   html+=`</div>`;
@@ -1039,7 +1040,38 @@ async function loadPluginStore(){
     const data=await(await fetch('/api/plugins/marketplace')).json();
     pluginData=data.plugins||[];
     renderPluginList(pluginData,true);
+    // Show enterprise mode status
+    const toggle=document.getElementById('enterprise-toggle');
+    if(toggle){
+      const mode=await(await fetch('/api/enterprise-mode')).json();
+      if(mode.officialOnly){
+        toggle.innerHTML=`<div class="cfg-guide" style="display:flex;justify-content:space-between;align-items:center">
+          <span>公式プラグインのみ表示中 (${pluginData.length}件)</span>
+          <button class="cfg-action" onclick="toggleCommunityPlugins()">コミュニティも表示</button>
+        </div>`;
+      }else{
+        toggle.innerHTML=`<div class="cfg-guide" style="border-color:var(--or);display:flex;justify-content:space-between;align-items:center">
+          <span>コミュニティプラグインが有効です</span>
+          <button class="cfg-action" onclick="toggleCommunityPlugins()">公式のみに戻す</button>
+        </div>`;
+      }
+    }
   }catch(e){console.error('loadPluginStore:',e)}
+}
+
+async function toggleCommunityPlugins(){
+  const mode=await(await fetch('/api/enterprise-mode')).json();
+  if(mode.officialOnly){
+    // Enabling community — show warning first
+    const res=await(await postJson('/api/enterprise-mode/toggle',{})).json();
+    if(res.requireConfirm){
+      if(!confirm(res.warning))return;
+      await postJson('/api/enterprise-mode/toggle',{confirm:true});
+    }
+  }else{
+    await postJson('/api/enterprise-mode/toggle',{});
+  }
+  loadPluginStore();
 }
 
 let pluginPageSize=20;

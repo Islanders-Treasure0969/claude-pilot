@@ -30,6 +30,32 @@ const WORKFLOW_FILE = path.join(PROJECT_DIR, ".claude-pilot", "workflow.yml");
 const PRD_ROOT = path.resolve(PROJECT_DIR, getArg("prd-root", process.env.CLAUDE_PILOT_PRD_ROOT || ".local/prd"));
 const STATE_DIR = path.resolve(PROJECT_DIR, getArg("state-dir", process.env.CLAUDE_PILOT_STATE_DIR || ".local/claude_pilot/state"));
 
+// Enterprise mode: only allow Anthropic official plugins by default
+// Set CLAUDE_PILOT_OFFICIAL_ONLY=false to allow community plugins
+const OFFICIAL_ONLY = process.env.CLAUDE_PILOT_OFFICIAL_ONLY !== "false"; // default: true
+let communityPluginsEnabled = !OFFICIAL_ONLY;
+
+// API to check/toggle enterprise mode
+app.get("/api/enterprise-mode", (_r, res) => {
+  res.json({ officialOnly: !communityPluginsEnabled, communityPluginsEnabled });
+});
+
+app.post("/api/enterprise-mode/toggle", (req, res) => {
+  if (OFFICIAL_ONLY && !communityPluginsEnabled) {
+    // Enabling community plugins requires explicit confirmation
+    if (!req.body.confirm) {
+      return res.json({
+        ok: false,
+        warning: "コミュニティプラグインを有効にすると、Anthropic が検証していないサードパーティ製プラグインがインストール可能になります。これらのプラグインはセキュリティリスクを伴う可能性があります。有効にしますか？",
+        requireConfirm: true,
+      });
+    }
+  }
+  communityPluginsEnabled = !communityPluginsEnabled;
+  addEvent("default", "Security", `Community plugins: ${communityPluginsEnabled ? "ENABLED (opt-in)" : "DISABLED"}`);
+  res.json({ ok: true, communityPluginsEnabled });
+});
+
 app.use(express.json({ limit: "512kb" }));
 
 // Security headers
@@ -1341,7 +1367,9 @@ app.get("/api/plugins/marketplace", async (_r, res) => {
     try { installed = JSON.parse(readFileSafe(settingsPath) || "{}").enabledPlugins || {}; } catch {}
     const installedNames = new Set(Object.keys(installed).map(n => n.replace(/@.*$/, "")));
     plugins.forEach(p => { p.installed = installedNames.has(p.name); });
-    res.json({ plugins, total: plugins.length, installed: installedNames.size });
+    // Enterprise mode: filter to official only unless community is explicitly enabled
+    const filtered = communityPluginsEnabled ? plugins : plugins.filter(p => p.isAnthropic);
+    res.json({ plugins: filtered, total: filtered.length, installed: installedNames.size, officialOnly: !communityPluginsEnabled });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -1351,10 +1379,30 @@ const VALID_PLUGIN_NAME = /^[a-zA-Z0-9_-]+$/;
 const VALID_SCOPES = ["project", "user", "local"];
 
 app.post("/api/plugins/install", async (req, res) => {
-  const { name } = req.body;
+  const { name, force } = req.body;
   const scope = VALID_SCOPES.includes(req.body.scope) ? req.body.scope : "project";
   if (!name) return res.status(400).json({ error: "name required" });
   if (!VALID_PLUGIN_NAME.test(name)) return res.status(400).json({ error: "Invalid plugin name" });
+
+  // Enterprise mode: block non-official plugins unless force=true
+  if (!communityPluginsEnabled && !force) {
+    // Check if this plugin is official
+    const manifestPath = path.join(process.env.HOME || "", ".claude/plugins/marketplaces/claude-plugins-official/.claude-plugin/marketplace.json");
+    const manifestContent = readFileSafe(manifestPath);
+    if (manifestContent) {
+      try {
+        const manifest = JSON.parse(manifestContent);
+        const plugin = (manifest.plugins || []).find(p => p.name === name);
+        if (plugin && plugin.author?.name !== "Anthropic") {
+          return res.status(403).json({
+            error: "Community plugin blocked",
+            message: `"${name}" は Anthropic 公式プラグインではありません。社内利用モードでは公式プラグインのみインストール可能です。コミュニティプラグインを有効にするには環境変数 CLAUDE_PILOT_OFFICIAL_ONLY=false を設定してください。`,
+            officialOnly: true,
+          });
+        }
+      } catch {}
+    }
+  }
   try {
     const result = await new Promise((resolve, reject) => {
       execFile("claude", ["plugin", "install", name, "--scope", scope], { timeout: 30000 }, (err, stdout, stderr) => {
