@@ -35,11 +35,11 @@
   ],
   "license": "MIT",
   "dependencies": {
-    "@anthropic-ai/claude-agent-sdk": "^0.1.0",
-    "express": "^4.21.0",
-    "js-yaml": "^4.1.0"
+    "@anthropic-ai/claude-agent-sdk": "0.1.77",
+    "express": "4.22.1",
+    "js-yaml": "4.1.1"
   },
   "devDependencies": {
-    "@playwright/test": "^1.58.2"
+    "@playwright/test": "1.58.2"
   }
 }
