@@ -1038,27 +1038,45 @@ async function loadPluginStore(){
   try{
     const data=await(await fetch('/api/plugins/marketplace')).json();
     pluginData=data.plugins||[];
-    renderPluginList(pluginData);
+    renderPluginList(pluginData,true);
   }catch(e){console.error('loadPluginStore:',e)}
 }
 
-function renderPluginList(plugins){
+let pluginPageSize=20;
+let pluginShown=0;
+
+function renderPluginList(plugins,reset){
   const el=document.getElementById('plugin-list');
   if(!el)return;
+  if(reset)pluginShown=0;
   if(plugins.length===0){el.innerHTML='<div class="cfg-item"><span class="ci-val">No plugins found</span></div>';return}
-  el.innerHTML=plugins.slice(0,30).map(p=>{
+  if(pluginShown===0)el.innerHTML='';
+  const batch=plugins.slice(pluginShown,pluginShown+pluginPageSize);
+  batch.forEach(p=>{
     const badge=p.isAnthropic?'<span class="pl-cat" style="color:var(--gn);border-color:var(--gn)">Official</span>':'';
     const action=p.installed?'<span class="pl-installed">installed</span>':`<button class="pl-install-btn" onclick="installPlugin('${h(p.name)}')">Install</button>`;
-    const hp=p.homepage?`<a class="pl-link" href="${h(p.homepage)}" target="_blank">link</a>`:'';
-    return `<div class="plugin-row" title="${h(p.description)}${p.author!=='community'?' — by '+h(p.author):''}">
-      <span class="pl-name">${h(p.name)}</span>${badge}<span class="pl-desc">${h(p.description)}</span><span class="pl-cat">${h(p.category)}</span>${hp}${action}
-    </div>`;
-  }).join('')+(plugins.length>30?`<div class="cfg-item"><span class="ci-val">+${plugins.length-30} more</span></div>`:'');
+    const row=document.createElement('div');row.className='plugin-row';
+    row.title=h(p.description)+(p.author!=='community'?' — by '+h(p.author):'');
+    row.innerHTML=`<span class="pl-name">${h(p.name)}</span>${badge}<span class="pl-desc">${h(p.description)}</span><span class="pl-cat">${h(p.category)}</span>${action}`;
+    el.appendChild(row);
+  });
+  pluginShown+=batch.length;
+  // Remove old load-more button
+  const oldBtn=el.querySelector('.pl-load-more');
+  if(oldBtn)oldBtn.remove();
+  // Add load-more if there are more
+  const remaining=plugins.length-pluginShown;
+  if(remaining>0){
+    const btn=document.createElement('button');btn.className='pl-load-more';
+    btn.textContent=`もっと見る (残り ${remaining}件)`;
+    btn.onclick=()=>renderPluginList(plugins,false);
+    el.appendChild(btn);
+  }
 }
 
 function filterPlugins(q){
   const filtered=q?pluginData.filter(p=>p.name.includes(q)||p.description.includes(q)||(p.category||'').includes(q)):pluginData;
-  renderPluginList(filtered);
+  renderPluginList(filtered,true);
 }
 
 async function installPlugin(name){

@@ -285,6 +285,8 @@ body{font-family:var(--m);background:var(--bg);color:var(--tx);height:100vh;disp
 .plugin-row .pl-link{color:var(--txd);font-size:8px;white-space:nowrap;flex-shrink:0}
 .plugin-row .pl-link:hover{color:var(--bl)}
 .cfg-guide{font-size:10px;color:var(--or);background:rgba(210,153,34,.08);border:1px solid rgba(210,153,34,.2);border-radius:var(--radius);padding:8px 10px;margin:4px 0 8px;line-height:1.5}
+.pl-load-more{display:block;width:100%;font-family:var(--m);font-size:10px;padding:8px;margin-top:6px;border-radius:var(--radius);border:1px dashed var(--bd);color:var(--bl);background:none;cursor:pointer;text-align:center}
+.pl-load-more:hover{border-color:var(--bl);background:rgba(88,166,255,.05)}
 .plugin-filter{font-family:var(--m);font-size:10px;width:100%;background:var(--bg);color:var(--txb);border:1px solid var(--bd);border-radius:var(--radius);padding:6px 10px;margin-bottom:8px;outline:none}
 .plugin-filter:focus{border-color:var(--bl)}
 
