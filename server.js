@@ -659,8 +659,9 @@ const DECISION_TREE = {
       next: {
         question: "何をチェックしたい？",
         options: [
-          { label: "変更したコードを整理したい", action: { type: "skill", name: "/simplify", prompt: "/simplify" } },
-          { label: "バグやセキュリティをチェック", action: { type: "skill", name: "/code-review:code-review", prompt: "/code-review:code-review" } },
+          { label: "変更したコードを整理・改善したい", action: { type: "skill", name: "/simplify", prompt: "/simplify" } },
+          { label: "バグやセキュリティの問題を見つけたい", action: { type: "skill", name: "Bug & Security Check", prompt: "直近の変更を対象に、バグ、ロジックエラー、セキュリティ脆弱性をチェックしてください。問題があれば具体的なファイル名と行番号を示して修正案を提案してください。" } },
+          { label: "PR を作成してレビューしたい", action: { type: "skill", name: "/code-review:code-review", prompt: "/code-review:code-review" } },
           { label: "まとめて品質チェック", action: { type: "skill", name: "Full Review Team", prompt: "use team full-review" } },
         ],
       },
