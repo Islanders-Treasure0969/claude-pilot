@@ -4,6 +4,8 @@
 
 Development cockpit for Claude Code. Visualize workflows, discover skills, and send commands to your Claude Code terminal — all from a browser UI powered by cmux.
 
+> **Disclaimer**: This is an unofficial community tool and is not affiliated with, endorsed by, or sponsored by Anthropic. "Claude" is a trademark of Anthropic. This tool requires a valid Claude Code subscription.
+
 ## Features
 
 ### Workflow Management
