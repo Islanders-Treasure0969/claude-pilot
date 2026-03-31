@@ -15,7 +15,7 @@ a:hover{text-decoration:underline}
 .hero h1 span{color:var(--bl)}
 .hero p{font-size:18px;color:var(--tx);max-width:600px;margin:0 auto 8px}
 .hero .disclaimer{font-size:11px;color:#484f58;max-width:500px;margin:0 auto 20px}
-.hero .badges{display:flex;gap:8px;justify-content:center;margin-bottom:20px}
+.hero .badges{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-bottom:20px}
 .hero .badges img{height:20px}
 .btn{display:inline-block;padding:10px 24px;border-radius:8px;font-size:15px;font-weight:600;cursor:pointer}
 .btn-primary{background:var(--bl);color:#fff}
@@ -26,28 +26,36 @@ section{max-width:960px;margin:0 auto;padding:40px 20px}
 .workspace{text-align:center}
 .workspace img{width:100%;border-radius:12px;border:1px solid #30363d;box-shadow:0 8px 32px rgba(0,0,0,.4)}
 .workspace p{color:#484f58;font-size:12px;margin-top:8px}
-h2{font-size:28px;color:var(--txb);text-align:center;margin-bottom:32px}
+h2{font-size:28px;color:var(--txb);text-align:center;margin-bottom:12px}
+.section-desc{text-align:center;color:var(--tx);font-size:14px;margin-bottom:28px}
+.demo{text-align:center}
+.demo video{width:100%;max-width:800px;border-radius:12px;border:1px solid #30363d;box-shadow:0 8px 32px rgba(0,0,0,.4)}
+.demo p{color:#484f58;font-size:12px;margin-top:8px}
 .features .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:20px}
 .card{background:var(--s1);border:1px solid #21262d;border-radius:10px;padding:20px}
 .card h3{color:var(--txb);font-size:15px;margin-bottom:6px}
 .card p{font-size:13px}
-.ss-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(420px,1fr));gap:16px}
-.ss-item{border-radius:10px;overflow:hidden;border:1px solid #21262d}
-.ss-item img{width:100%;display:block}
-.ss-item .caption{background:var(--s1);padding:8px 14px;font-size:12px}
+.showcase{display:grid;grid-template-columns:1fr;gap:40px}
+.showcase-item{display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:center}
+.showcase-item.reverse{grid-template-columns:1fr 1fr;direction:rtl}
+.showcase-item.reverse>*{direction:ltr}
+.showcase-item img{width:100%;border-radius:10px;border:1px solid #21262d;box-shadow:0 4px 16px rgba(0,0,0,.3)}
+.showcase-item h3{color:var(--txb);font-size:18px;margin-bottom:8px}
+.showcase-item p{font-size:13px;line-height:1.6}
 .install{text-align:center}
 .code-block{background:var(--s1);border:1px solid #21262d;border-radius:10px;padding:18px 24px;text-align:left;font-family:'SF Mono',Consolas,monospace;font-size:13px;color:var(--gn);margin:16px auto;max-width:500px}
 .code-block .comment{color:#484f58}
 .footer{text-align:center;padding:30px 20px;border-top:1px solid #21262d;color:#484f58;font-size:12px}
-@media(max-width:600px){.hero h1{font-size:32px}.ss-grid{grid-template-columns:1fr}}
+@media(max-width:700px){.showcase-item,.showcase-item.reverse{grid-template-columns:1fr;direction:ltr}}
 </style>
 </head>
 <body>
 <section class="hero">
   <h1>Claude <span>Pilot</span></h1>
   <p>Claude Code + cmux のための開発コックピット</p>
-  <p class="disclaimer">This is an unofficial community tool, not affiliated with Anthropic.</p>
+  <p class="disclaimer">Unofficial community tool, not affiliated with Anthropic.</p>
   <div class="badges">
+    <img src="https://img.shields.io/npm/v/claude-pilot?style=flat-square&color=58a6ff" alt="npm">
     <img src="https://img.shields.io/badge/license-MIT-3fb950?style=flat-square" alt="license">
     <img src="https://img.shields.io/badge/tests-68%20passing-3fb950?style=flat-square" alt="tests">
     <img src="https://img.shields.io/badge/node-%3E%3D18-blue?style=flat-square" alt="node">
@@ -55,45 +63,96 @@ h2{font-size:28px;color:var(--txb);text-align:center;margin-bottom:32px}
   <a href="https://github.com/Islanders-Treasure0969/claude-pilot" class="btn btn-primary">View on GitHub</a>
   <a href="#install" class="btn btn-secondary">Quick Start</a>
 </section>
+
 <section class="workspace">
-  <img src="assets/hero-workspace.png" alt="cmux workspace with Claude Pilot">
-  <p>cmux workspace: Claude Code (left) + Yazi/lazygit (bottom left) + Claude Pilot dashboard (right)</p>
+  <img src="assets/hero-workspace.png" alt="cmux workspace">
+  <p>cmux workspace: Claude Code (left) + Yazi/lazygit (bottom) + Claude Pilot dashboard (right)</p>
 </section>
-<section class="features">
-  <h2>Features</h2>
-  <div class="grid">
-    <div class="card"><h3>Workflow Pipeline</h3><p>Requirements → Design → Implement → Review → Ship をリアルタイム可視化。Gate 条件を宣言的に定義。</p></div>
-    <div class="card"><h3>Exploit / Explore</h3><p>Exploit: フェーズ対応スキル推奨。Explore: 決定木で最適ツールに誘導。認知科学ベース設計。</p></div>
-    <div class="card"><h3>NEXT バー</h3><p>Gate + イベント + 使用統計からコンテキスト認識型の次のアクションを自動提案。</p></div>
-    <div class="card"><h3>Send to Terminal</h3><p>スキルクリックで cmux 経由 Claude Code に直接送信。Worker プロセスで安定動作。</p></div>
-    <div class="card"><h3>Ctrl+K パレット</h3><p>全スキル横断検索 + 意図ファジーマッチ。「行き詰まってる」で関連ツールが上位に。</p></div>
-    <div class="card"><h3>Exploration ツール</h3><p>CTA Interview / Retrospective / WSP-ISP 分類。暗黙知の引き出しと問題構造化。</p></div>
-    <div class="card"><h3>Plugin 管理</h3><p>マーケットプレイスから検索・インストール。Enterprise モードで公式のみに制限可能。</p></div>
-    <div class="card"><h3>Usage Analytics</h3><p>各機能の使用状況追跡。未使用機能のナビ付き。活用度スコアで改善促進。</p></div>
-  </div>
+
+<section class="demo">
+  <h2>Demo</h2>
+  <video autoplay loop muted playsinline>
+    <source src="assets/demo.webm" type="video/webm">
+  </video>
+  <p>パイプライン操作 → コマンドパレット → Config パネル → レトロモード</p>
 </section>
+
 <section>
-  <h2>Screenshots</h2>
-  <div class="ss-grid">
-    <div class="ss-item"><img src="assets/ss-dashboard.png" alt="Dashboard" loading="lazy"><div class="caption">ダッシュボード: パイプライン + サブステップ + NEXT バー</div></div>
-    <div class="ss-item"><img src="assets/ss-actions-exploit.png" alt="Actions" loading="lazy"><div class="caption">Actions (Exploit): フェーズ対応スキル推奨 + Teams</div></div>
-    <div class="ss-item"><img src="assets/ss-explore.png" alt="Explore" loading="lazy"><div class="caption">Explore: 決定木ナビ + CTA Interview / Retrospective</div></div>
-    <div class="ss-item"><img src="assets/ss-config.png" alt="Config" loading="lazy"><div class="caption">Config: Hooks, Plugins, Prompts, Analytics</div></div>
+  <h2>Feature Showcase</h2>
+  <p class="section-desc">各機能のスクリーンショットと説明</p>
+  <div class="showcase">
+    <div class="showcase-item">
+      <img src="assets/ss-dashboard.png" alt="Dashboard">
+      <div>
+        <h3>Workflow Pipeline</h3>
+        <p>Requirements → Design → Implement → Review → Ship の各フェーズをリアルタイムで可視化。Gate 条件（チェックリスト、キーワード、ファイル存在）で自動進行。NEXT バーがコンテキストに応じた次のアクションを提案。</p>
+      </div>
+    </div>
+    <div class="showcase-item reverse">
+      <img src="assets/ss-pipeline.png" alt="Substeps">
+      <div>
+        <h3>Substep Tracking</h3>
+        <p>各フェーズのサブステップを詳細表示。完了状態を Gate ルールで自動評価。クリックでスキルの詳細やSend to Terminalのポップオーバーが開く。</p>
+      </div>
+    </div>
+    <div class="showcase-item">
+      <img src="assets/ss-actions-exploit.png" alt="Actions Exploit">
+      <div>
+        <h3>Actions — Exploit モード</h3>
+        <p>現在のフェーズに応じたスキルを推奨。フェーズタグに基づくマッチングで、Review フェーズなら /simplify や /code-review が上位に。Teams でバッチ実行も可能。</p>
+      </div>
+    </div>
+    <div class="showcase-item reverse">
+      <img src="assets/ss-explore.png" alt="Explore">
+      <div>
+        <h3>Actions — Explore モード</h3>
+        <p>決定木ナビゲーションで最適なツールに誘導。「行き詰まってる」「振り返りたい」「新しいタスク」から掘り下げて、CTA Interview / Retrospective / WSP-ISP 分類に到達。</p>
+      </div>
+    </div>
+    <div class="showcase-item">
+      <img src="assets/ss-palette-intent.png" alt="Palette">
+      <div>
+        <h3>Ctrl+K コマンドパレット</h3>
+        <p>全スキル横断検索に加えて、意図ファジーマッチ対応。「行き詰まってる」と入力すれば WSP/ISP 分類や CTA Interview が上位に。推奨アクションは緑ハイライト。</p>
+      </div>
+    </div>
+    <div class="showcase-item reverse">
+      <img src="assets/ss-analytics.png" alt="Analytics">
+      <div>
+        <h3>Usage Analytics</h3>
+        <p>各機能の使用状況を追跡。活用度スコアで未使用機能を可視化し、次のステップをナビゲーション。CLAUDE.md の品質スコアやPRD 進捗も一覧表示。</p>
+      </div>
+    </div>
   </div>
 </section>
+
+<section class="features">
+  <h2>All Features</h2>
+  <div class="grid">
+    <div class="card"><h3>Send to Terminal</h3><p>スキルクリックで cmux 経由 Claude Code に直接送信。Worker プロセスで安定動作。</p></div>
+    <div class="card"><h3>Plugin 管理</h3><p>マーケットプレイスから検索・インストール。Enterprise モードで公式プラグインのみに制限可能。</p></div>
+    <div class="card"><h3>Phase Revert</h3><p>手戻り時に前のフェーズに戻せる。理由を feedback-log.md に記録して振り返りに活用。</p></div>
+    <div class="card"><h3>Autopilot</h3><p>サブステップを順番に自動実行。cmux 経由で Claude Code セッションに送信。</p></div>
+    <div class="card"><h3>Prompt Library</h3><p>よく使うプロンプトを保存・再利用。Config パネルから管理。</p></div>
+    <div class="card"><h3>Hookify 連携</h3><p>メタ認知的 Stop hook で振り返りを促進。開発規律ルールの自動適用。</p></div>
+  </div>
+</section>
+
 <section class="install" id="install">
   <h2>Quick Start</h2>
   <div class="code-block">
-    <span class="comment"># Install</span><br>
-    npm install -g claude-pilot<br><br>
+    <span class="comment"># Install from GitHub</span><br>
+    npm install -g github:Islanders-Treasure0969/claude-pilot<br><br>
     <span class="comment"># In your project (cmux terminal pane)</span><br>
     claude-pilot<br><br>
     <span class="comment"># Or scaffold from .claude/ directory</span><br>
     claude-pilot scaffold --output .claude-pilot/workflow.yml
   </div>
+  <p style="color:#484f58;font-size:12px;margin-top:12px"><s>npm install -g claude-pilot</s> — npm publish は後日対応予定</p>
 </section>
+
 <footer class="footer">
-  MIT License &middot; <a href="https://github.com/Islanders-Treasure0969/claude-pilot">GitHub</a> &middot; <a href="https://github.com/Islanders-Treasure0969/claude-pilot/blob/main/README.ja.md">日本語ドキュメント</a>
+  MIT License · <a href="https://github.com/Islanders-Treasure0969/claude-pilot">GitHub</a> · <a href="https://github.com/Islanders-Treasure0969/claude-pilot/blob/main/README.ja.md">日本語ドキュメント</a>
 </footer>
 </body>
 </html>
