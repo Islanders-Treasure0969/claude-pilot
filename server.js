@@ -30,6 +30,8 @@ const WORKFLOW_FILE = path.join(PROJECT_DIR, ".claude-pilot", "workflow.yml");
 const PRD_ROOT = path.resolve(PROJECT_DIR, getArg("prd-root", process.env.CLAUDE_PILOT_PRD_ROOT || ".local/prd"));
 const STATE_DIR = path.resolve(PROJECT_DIR, getArg("state-dir", process.env.CLAUDE_PILOT_STATE_DIR || ".local/claude_pilot/state"));
 
+app.use(express.json({ limit: "512kb" }));
+
 // Enterprise mode: only allow Anthropic official plugins by default
 // Set CLAUDE_PILOT_OFFICIAL_ONLY=false to allow community plugins
 const OFFICIAL_ONLY = process.env.CLAUDE_PILOT_OFFICIAL_ONLY !== "false"; // default: true
@@ -55,8 +57,6 @@ app.post("/api/enterprise-mode/toggle", (req, res) => {
   addEvent("default", "Security", `Community plugins: ${communityPluginsEnabled ? "ENABLED (opt-in)" : "DISABLED"}`);
   res.json({ ok: true, communityPluginsEnabled });
 });
-
-app.use(express.json({ limit: "512kb" }));
 
 // Security headers
 app.use((_req, res, next) => {
