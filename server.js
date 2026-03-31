@@ -660,7 +660,7 @@ const DECISION_TREE = {
         question: "何をチェックしたい？",
         options: [
           { label: "変更したコードを整理したい", action: { type: "skill", name: "/simplify", prompt: "/simplify" } },
-          { label: "バグやセキュリティをチェック", action: { type: "skill", name: "/code-review", prompt: "/code-review" } },
+          { label: "バグやセキュリティをチェック", action: { type: "skill", name: "/code-review:code-review", prompt: "/code-review:code-review" } },
           { label: "まとめて品質チェック", action: { type: "skill", name: "Full Review Team", prompt: "use team full-review" } },
         ],
       },
