@@ -524,7 +524,8 @@ app.get("/api/recommendations", (_r, res) => {
     const nameLower = (skill.name + " " + skill.desc).toLowerCase();
 
     // Match against step tags (not hardcoded keywords)
-    if (activeTags.length > 0 && activeTags.some(tag => new RegExp(`\\b${tag}\\b`).test(nameLower))) {
+    const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    if (activeTags.length > 0 && activeTags.some(tag => new RegExp(`\\b${escapeRegex(tag)}\\b`).test(nameLower))) {
       recommended.push({ ...skill, reason: `${activeLabel} フェーズで推奨` });
     } else {
       other.push(skill);
@@ -1734,7 +1735,7 @@ app.get("/", (_r, res) => res.sendFile(path.join(__dirname, "public", "index.htm
 
 if (activePrdId) syncPrdToSession(activePrdId, "default", false);
 
-app.listen(PORT, async () => {
+app.listen(PORT, "127.0.0.1", async () => {
   const prds = discoverPrds();
   const cmuxStatus = cmux.available ? `workspace:${cmux.workspaceId?.slice(0, 8)}` : "not available";
   console.log(`

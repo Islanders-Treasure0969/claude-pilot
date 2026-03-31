@@ -10,8 +10,9 @@ node_modules/
 .idea/
 .vscode/
 
-# Claude settings (may contain API keys)
+# Claude settings (may contain API keys or local config)
 .claude/settings.local.json
+.claude/*.local.md
 .claude-pilot/prompts/
 .claude-pilot/config.local.yml
 
