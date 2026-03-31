@@ -4,6 +4,9 @@
   "description": "Development cockpit for Claude Code — workflow visualization, skill suggestions, cmux integration",
   "main": "server.js",
   "type": "module",
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "bin": {
     "claude-pilot": "./cli.js"
   },
