@@ -22,6 +22,7 @@
     "gate-engine.js",
     "scanner.js",
     "cmux-bridge.js",
+    "cmux-worker.js",
     "public/",
     "README.md",
     "LICENSE"
