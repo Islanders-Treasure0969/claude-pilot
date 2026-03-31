@@ -141,12 +141,14 @@ h2{font-size:28px;color:var(--txb);text-align:center;margin-bottom:12px}
 <section class="install" id="install">
   <h2>Quick Start</h2>
   <div class="code-block">
-    <span class="comment"># Install from GitHub</span><br>
-    npm install -g github:Islanders-Treasure0969/claude-pilot<br><br>
-    <span class="comment"># In your project (cmux terminal pane)</span><br>
-    claude-pilot<br><br>
-    <span class="comment"># Or scaffold from .claude/ directory</span><br>
-    claude-pilot scaffold --output .claude-pilot/workflow.yml
+    <span class="comment"># Clone &amp; install</span><br>
+    git clone https://github.com/Islanders-Treasure0969/claude-pilot.git<br>
+    cd claude-pilot<br>
+    npm install<br><br>
+    <span class="comment"># Start (in your project's cmux terminal pane)</span><br>
+    node cli.js<br><br>
+    <span class="comment"># Or scaffold workflow from .claude/ directory</span><br>
+    node cli.js scaffold --output .claude-pilot/workflow.yml
   </div>
   <p style="color:#484f58;font-size:12px;margin-top:12px"><s>npm install -g claude-pilot</s> — npm publish は後日対応予定</p>
 </section>
