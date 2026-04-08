@@ -8,6 +8,7 @@
 import express from "express";
 import path from "path";
 import fs from "fs";
+import crypto from "crypto";
 import { fileURLToPath } from "url";
 import yaml from "js-yaml";
 import { query } from "@anthropic-ai/claude-agent-sdk";
@@ -23,8 +24,18 @@ const app = express();
 const args = process.argv.slice(2);
 const getArg = (n, d) => { const i = args.indexOf("--" + n); return i !== -1 && args[i + 1] ? args[i + 1] : d; };
 
-const PORT = parseInt(getArg("port", process.env.CLAUDE_PILOT_PORT || "3456"), 10);
 const PROJECT_DIR = path.resolve(getArg("project", process.cwd()));
+// Port resolution mirrors cli.js: explicit > env > auto-pick from project hash.
+// When server.js is launched via cli.js, --port is always provided.
+// This branch only matters when server.js is run directly (e.g. node server.js).
+function autoPickServerPort(projectDir, base = 3456, range = 100) {
+  const hash = crypto.createHash("sha1").update(projectDir).digest();
+  return base + (hash.readUInt16BE(0) % range);
+}
+const PORT = parseInt(
+  getArg("port", process.env.CLAUDE_PILOT_PORT || autoPickServerPort(PROJECT_DIR)),
+  10
+);
 const PROJECT_NAME = path.basename(PROJECT_DIR);
 const WORKFLOW_FILE = path.join(PROJECT_DIR, ".claude-pilot", "workflow.yml");
 const PRD_ROOT = path.resolve(PROJECT_DIR, getArg("prd-root", process.env.CLAUDE_PILOT_PRD_ROOT || ".local/prd"));

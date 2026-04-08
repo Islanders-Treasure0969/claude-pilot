@@ -7,6 +7,8 @@
 import { fileURLToPath } from "url";
 import path from "path";
 import fs from "fs";
+import crypto from "crypto";
+import net from "net";
 import { execFile, spawn } from "child_process";
 import yaml from "js-yaml";
 
@@ -25,11 +27,44 @@ function hasFlag(name) {
   return cmdArgs.includes("--" + name) || cmdArgs.includes("-" + name[0]);
 }
 
-// ── Config resolution: CLI > config.yml > env > defaults ──
+// ── Port selection helpers ────────────────────────
+
+const PORT_BASE = 3456;
+const PORT_RANGE = 100;
+const PORT_PROBE_LIMIT = 20;
+
+// Compute a stable port from the project absolute path.
+// Same project -> same port (bookmarkable). Different projects -> usually different.
+export function autoPickPort(projectDir, base = PORT_BASE, range = PORT_RANGE) {
+  const hash = crypto.createHash("sha1").update(projectDir).digest();
+  const offset = hash.readUInt16BE(0) % range;
+  return base + offset;
+}
+
+// Check if a TCP port is free on localhost.
+export function isPortAvailable(port) {
+  return new Promise(resolve => {
+    const server = net.createServer();
+    server.once("error", () => resolve(false));
+    server.once("listening", () => server.close(() => resolve(true)));
+    server.listen(port, "127.0.0.1");
+  });
+}
+
+// Linear probe starting from `start` for up to `limit` ports inside the band.
+export async function findAvailablePort(start, base = PORT_BASE, range = PORT_RANGE, limit = PORT_PROBE_LIMIT) {
+  for (let i = 0; i < limit; i++) {
+    const candidate = base + ((start - base + i) % range);
+    if (await isPortAvailable(candidate)) return candidate;
+  }
+  return null;
+}
+
+// ── Config resolution: CLI > env > config.yml > auto-pick > defaults ──
 
 function resolveConfig(projectDir) {
   const defaults = {
-    port: 3456,
+    port: PORT_BASE,
     prdRoot: ".local/prd",
     stateDir: ".local/claude_pilot/state",
   };
@@ -47,8 +82,18 @@ function resolveConfig(projectDir) {
     };
   } catch {}
 
+  // Track how the port was decided so we can show it in startup log
+  const cliPort = getArg("port", null);
+  const envPort = process.env.CLAUDE_PILOT_PORT;
+  let port, portSource;
+  if (cliPort) { port = cliPort; portSource = "cli"; }
+  else if (envPort) { port = envPort; portSource = "env"; }
+  else if (fileConfig.port) { port = fileConfig.port; portSource = "config"; }
+  else { port = autoPickPort(projectDir); portSource = "auto"; }
+
   return {
-    port: getArg("port", process.env.CLAUDE_PILOT_PORT || fileConfig.port || defaults.port),
+    port: parseInt(port, 10),
+    portSource,
     prdRoot: getArg("prd-root", process.env.CLAUDE_PILOT_PRD_ROOT || fileConfig.prdRoot || defaults.prdRoot),
     stateDir: getArg("state-dir", process.env.CLAUDE_PILOT_STATE_DIR || fileConfig.stateDir || defaults.stateDir),
   };
@@ -71,7 +116,7 @@ function showHelp() {
 
   Server Options:
     --project <path>    Project root (default: current directory)
-    --port <number>     Server port (default: 3456)
+    --port <number>     Server port (default: auto-picked from project hash, 3456-3555)
     --prd-root <path>   Work item directory (default: .local/prd)
     --state-dir <path>  State directory (default: .local/claude_pilot/state)
     --open              Open browser after startup
@@ -101,10 +146,36 @@ async function cmdServer() {
   const projectDir = path.resolve(getArg("project", process.cwd()));
   const config = resolveConfig(projectDir);
 
+  // Auto-picked ports may collide if multiple projects hash to the same slot.
+  // Probe forward in the band to find a free port. CLI/env/config wins are
+  // honored as-is — we never override an explicit user choice silently.
+  let finalPort = config.port;
+  let finalSource = config.portSource;
+  if (config.portSource === "auto") {
+    const free = await findAvailablePort(config.port);
+    if (free === null) {
+      console.error(`  Error: no free port found near ${config.port} (probed ${PORT_PROBE_LIMIT} candidates).`);
+      console.error(`  Specify one with --port or set server.port in .claude-pilot/config.yml.`);
+      process.exit(1);
+    }
+    if (free !== config.port) finalSource = "auto+probe";
+    finalPort = free;
+  }
+
+  // Surface how the port was decided so users can debug "why this port?"
+  const sourceLabels = {
+    cli: "from --port",
+    env: "from CLAUDE_PILOT_PORT",
+    config: "from .claude-pilot/config.yml",
+    auto: "auto-picked from project hash",
+    "auto+probe": `auto-picked + probed (original ${config.port} was busy)`,
+  };
+  console.log(`  Port: ${finalPort} (${sourceLabels[finalSource]})`);
+
   const serverArgs = [
     path.join(__dirname, "server.js"),
     "--project", projectDir,
-    "--port", String(config.port),
+    "--port", String(finalPort),
     "--prd-root", config.prdRoot,
     "--state-dir", config.stateDir,
   ];
@@ -114,7 +185,7 @@ async function cmdServer() {
 
   if (hasFlag("open")) {
     setTimeout(() => {
-      const url = `http://localhost:${config.port}`;
+      const url = `http://localhost:${finalPort}`;
       const openCmd = process.platform === "darwin" ? "open" : process.platform === "win32" ? "start" : "xdg-open";
       execFile(openCmd, [url], () => {});
     }, 2000);
@@ -154,10 +225,12 @@ async function cmdInit() {
   const configPath = path.join(pilotDir, "config.yml");
   if (!fs.existsSync(configPath)) {
     fs.writeFileSync(configPath, `# Claude Pilot Configuration
-# Priority: CLI args > this file > env vars > defaults
+# Priority: CLI args > env vars > this file > auto-pick (project hash) > defaults
 
 server:
-  port: 3456
+  # Port is auto-picked from project path hash by default (3456-3555).
+  # Uncomment to pin a specific port for this project.
+  # port: 3456
 
 directories:
   prd_root: .local/prd
@@ -166,19 +239,21 @@ directories:
     console.log("  Created config.yml");
   }
 
+  // Show the auto-picked port so users know what to expect
+  const autoPort = autoPickPort(targetDir);
   console.log(`
   Done! Next steps:
 
   1. Edit .claude-pilot/workflow.yml to customize your workflow
   2. Start the server:
      claude-pilot --project ${targetDir}
-  3. Open http://localhost:3456
+  3. Open http://localhost:${autoPort}  (auto-picked from project hash)
 
   Optional: Add hooks to .claude/settings.local.json:
     {
       "hooks": {
-        "PostToolUse": [{"hooks": [{"type": "http", "url": "http://localhost:3456/hooks/PostToolUse", "async": true}]}],
-        "Stop": [{"hooks": [{"type": "http", "url": "http://localhost:3456/hooks/Stop", "async": true}]}]
+        "PostToolUse": [{"hooks": [{"type": "http", "url": "http://localhost:${autoPort}/hooks/PostToolUse", "async": true}]}],
+        "Stop": [{"hooks": [{"type": "http", "url": "http://localhost:${autoPort}/hooks/Stop", "async": true}]}]
       }
     }
 `);
@@ -229,6 +304,7 @@ async function cmdStatus() {
   } catch {
     console.log(`  Server:   Not running`);
   }
+  console.log(`  Port:     ${config.port} (${config.portSource})`);
 
   // Check workflow
   const workflowPath = path.join(projectDir, ".claude-pilot", "workflow.yml");
@@ -285,16 +361,21 @@ async function cmdStatus() {
 
 // ── Dispatch ────────────────────────────────────
 
-if (hasFlag("help") || hasFlag("h")) {
-  showHelp();
-} else if (hasFlag("version") || hasFlag("v")) {
-  console.log(pkg.version);
-} else if (command === "init") {
-  cmdInit();
-} else if (command === "scaffold") {
-  cmdScaffold();
-} else if (command === "status") {
-  cmdStatus();
-} else {
-  cmdServer();
+// Only dispatch when run as the main entry point. This lets test files
+// `import { autoPickPort, ... } from "../cli.js"` without triggering the server.
+const isMainEntry = process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1]);
+if (isMainEntry) {
+  if (hasFlag("help") || hasFlag("h")) {
+    showHelp();
+  } else if (hasFlag("version") || hasFlag("v")) {
+    console.log(pkg.version);
+  } else if (command === "init") {
+    cmdInit();
+  } else if (command === "scaffold") {
+    cmdScaffold();
+  } else if (command === "status") {
+    cmdStatus();
+  } else {
+    cmdServer();
+  }
 }
