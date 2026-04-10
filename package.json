@@ -20,6 +20,7 @@
     "cli.js",
     "server.js",
     "gate-engine.js",
+    "phase-guard.js",
     "scanner.js",
     "cmux-bridge.js",
     "cmux-worker.js",

@@ -14,6 +14,7 @@ import yaml from "js-yaml";
 import { query } from "@anthropic-ai/claude-agent-sdk";
 import { CmuxBridge } from "./cmux-bridge.js";
 import { evaluateGates, evaluateSubsteps, readFileSafe } from "./gate-engine.js";
+import { checkPhaseGateGuard } from "./phase-guard.js";
 import { scanProjectSkills, scanInstalledPlugins, scaffoldWorkflow } from "./scanner.js";
 import { execFile } from "child_process";
 
@@ -1735,6 +1736,33 @@ app.post("/api/run", async (req, res) => {
     agentRunning = false;
     broadcast({ type: "agent_status", running: false });
   }
+});
+
+// ── PreToolUse guard — block source edits in early phases ──
+
+function shouldBlockEdit(toolName, toolInput) {
+  const { statuses } = activePrdId ? detectPhaseStatus(activePrdId) : { statuses: {} };
+  return checkPhaseGateGuard({
+    toolName,
+    filePath: toolInput?.file_path || "",
+    activePrdId,
+    projectDir: PROJECT_DIR,
+    prdRoot: PRD_ROOT,
+    steps: workflow.steps || [],
+    statuses,
+  });
+}
+
+app.post("/hooks/PreToolUse", (req, res) => {
+  const b = req.body || {};
+  const toolName = b.tool_name || "";
+  const toolInput = b.tool_input || {};
+
+  const blockResult = shouldBlockEdit(toolName, toolInput);
+  if (blockResult) {
+    return res.json(blockResult);
+  }
+  res.json({ decision: "allow" });
 });
 
 // ── Hook receiver ───────────────────────────────
