@@ -305,6 +305,21 @@ body{font-family:var(--m);background:var(--bg);color:var(--tx);height:100vh;disp
 ::-webkit-scrollbar-thumb{background:var(--bd);border-radius:3px}
 ::-webkit-scrollbar-thumb:hover{background:var(--bdh)}
 
+/* ─── Document Viewer (PRD Artifacts) ───────────── */
+.doc-viewer{display:flex;flex-direction:column;gap:8px}
+.doc-phases{display:flex;gap:4px;flex-wrap:wrap;padding-bottom:8px;border-bottom:1px solid var(--bd)}
+.doc-phase-btn{font-family:var(--m);font-size:9px;padding:4px 10px;border-radius:var(--radius);border:1px solid var(--bd);background:none;color:var(--txd);cursor:pointer;transition:all .12s;white-space:nowrap}
+.doc-phase-btn:hover{border-color:var(--pp);color:var(--pp)}
+.doc-phase-btn.active{border-color:var(--pp);color:var(--pp);background:var(--ppb)}
+.doc-phase-btn.current{border-color:var(--or);color:var(--or)}
+.doc-phase-btn.current.active{border-color:var(--pp);color:var(--pp);background:var(--ppb)}
+.doc-files{display:flex;gap:4px;flex-wrap:wrap;padding-bottom:6px}
+.doc-file-btn{font-family:var(--m);font-size:9px;padding:3px 8px;border-radius:var(--radius);border:1px solid var(--bd);background:none;color:var(--bl);cursor:pointer;transition:all .12s;white-space:nowrap}
+.doc-file-btn:hover{border-color:var(--bl);background:var(--blb)}
+.doc-file-btn.active{border-color:var(--bl);background:var(--blb);font-weight:500}
+.doc-content{background:var(--bg);border:1px solid var(--bd);border-radius:var(--radius);max-height:40vh;overflow-y:auto;padding:0}
+.doc-pre{font-family:var(--m);font-size:10px;line-height:1.7;color:var(--tx);padding:12px;margin:0;white-space:pre-wrap;word-break:break-word}
+
 /* ─── Easter egg: Konami code activates retro mode ── */
 body.retro{
   background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,255,0,.03) 2px,rgba(0,255,0,.03) 4px);
