@@ -954,6 +954,7 @@ function renderConfig(){
     <button class="cfg-tab" onclick="switchCfgTab('plugins',this)">Plugins</button>
     <button class="cfg-tab" onclick="switchCfgTab('prompts',this)">Prompts</button>
     <button class="cfg-tab" onclick="switchCfgTab('analytics',this)">Analytics</button>
+    <button class="cfg-tab" onclick="switchCfgTab('documents',this)">Documents</button>
   </div>`;
 
   // Tab: Overview
@@ -1020,6 +1021,16 @@ function renderConfig(){
   html+=`<div id="analytics-content">Loading...</div>`;
   html+=`</div>`;
 
+  // Tab: Documents (PRD artifact viewer)
+  html+=`<div class="cfg-tab-content" id="cfg-documents">`;
+  html+=`<div class="doc-viewer" id="doc-viewer">`;
+  html+=`<div class="doc-phases" id="doc-phases"></div>`;
+  html+=`<div class="doc-files" id="doc-files"></div>`;
+  html+=`<div class="doc-content" id="doc-content"><pre class="doc-pre">Select a phase and file to view</pre></div>`;
+  html+=`</div></div>`;
+
+  // Note: innerHTML assignment here is safe because all dynamic content
+  // (cfgData values, plugin names, etc.) is escaped via h() before interpolation.
   panel.innerHTML=html;
   loadUnregisteredSkills();
   loadPluginStore();
@@ -1032,6 +1043,7 @@ function switchCfgTab(tabId,btn){
   document.querySelectorAll('.cfg-tab-content').forEach(c=>c.classList.remove('active'));
   btn.classList.add('active');
   document.getElementById('cfg-'+tabId).classList.add('active');
+  if(tabId==='documents')loadDocPhases();
 }
 
 let pluginData=[];
@@ -1326,6 +1338,143 @@ async function runPrompt(text){
     if(data.ok)addLog('Prompt sent');
     else addLog('Prompt failed: '+(data.error||'unknown'));
   }catch(e){addLog('Prompt error: '+e.message)}
+}
+
+/* Document Viewer (PRD Artifacts) */
+let docSelectedPhase=null,docSelectedFile=null,docPollTimer=null;
+
+async function loadDocPhases(){
+  const container=document.getElementById('doc-phases');
+  if(!container)return;
+  if(!activePrd){container.textContent='Select a PRD first';return}
+  try{
+    const data=await(await fetch('/api/prd/'+encodeURIComponent(activePrd)+'/phases')).json();
+    const phases=data.phases||[];
+    container.textContent='';
+    // PRD root button
+    const prdBtn=document.createElement('button');
+    prdBtn.className='doc-phase-btn'+(docSelectedPhase==='_root'?' active':'');
+    prdBtn.textContent='PRD';
+    prdBtn.onclick=()=>selectDocPhase('_root');
+    container.appendChild(prdBtn);
+    phases.forEach(p=>{
+      const btn=document.createElement('button');
+      btn.className='doc-phase-btn'+(p.current?' current':'')+(docSelectedPhase===p.name?' active':'');
+      btn.textContent=p.label;
+      btn.title=p.name+' ('+p.status+')';
+      btn.onclick=()=>selectDocPhase(p.name);
+      container.appendChild(btn);
+    });
+    // Auto-select current phase if nothing selected
+    if(!docSelectedPhase){
+      const cur=phases.find(p=>p.current);
+      if(cur)selectDocPhase(cur.name);
+    }
+  }catch(e){container.textContent='Error loading phases'}
+}
+
+async function selectDocPhase(phaseName){
+  docSelectedPhase=phaseName;
+  docSelectedFile=null;
+  stopDocPoll();
+  // Update active state on phase buttons
+  const btns=document.querySelectorAll('.doc-phase-btn');
+  btns.forEach(b=>b.classList.toggle('active',b.textContent==='PRD'?phaseName==='_root':b.title?.startsWith(phaseName+' ')));
+  if(phaseName==='_root'){
+    loadDocPrdContent();
+    const filesEl=document.getElementById('doc-files');
+    if(filesEl)filesEl.textContent='';
+    return;
+  }
+  // Load files for this phase
+  try{
+    const data=await(await fetch('/api/prd/'+encodeURIComponent(activePrd)+'/phases')).json();
+    const phase=(data.phases||[]).find(p=>p.name===phaseName);
+    const filesEl=document.getElementById('doc-files');
+    if(!filesEl)return;
+    filesEl.textContent='';
+    if(!phase||phase.files.length===0){
+      filesEl.textContent='No files in this phase';
+      const contentEl=document.getElementById('doc-content');
+      if(contentEl){const pre=document.createElement('pre');pre.className='doc-pre';pre.textContent='No artifacts yet';contentEl.textContent='';contentEl.appendChild(pre)}
+      return;
+    }
+    phase.files.forEach(f=>{
+      const btn=document.createElement('button');
+      btn.className='doc-file-btn';
+      btn.textContent=f;
+      btn.onclick=()=>loadDocArtifact(phaseName,f);
+      filesEl.appendChild(btn);
+    });
+    // Auto-select first file
+    if(phase.files.length>0)loadDocArtifact(phaseName,phase.files[0]);
+  }catch(e){
+    const filesEl=document.getElementById('doc-files');
+    if(filesEl)filesEl.textContent='Error loading files';
+  }
+}
+
+async function loadDocPrdContent(){
+  const contentEl=document.getElementById('doc-content');
+  if(!contentEl||!activePrd)return;
+  try{
+    const data=await(await fetch('/api/prd/'+encodeURIComponent(activePrd)+'/content')).json();
+    const pre=document.createElement('pre');
+    pre.className='doc-pre';
+    pre.textContent=data.content||'(empty)';
+    contentEl.textContent='';
+    contentEl.appendChild(pre);
+  }catch(e){
+    const pre=document.createElement('pre');
+    pre.className='doc-pre';
+    pre.textContent='No PRD document found';
+    contentEl.textContent='';
+    contentEl.appendChild(pre);
+  }
+}
+
+async function loadDocArtifact(phase,file){
+  docSelectedFile={phase,file};
+  // Highlight active file button
+  document.querySelectorAll('.doc-file-btn').forEach(b=>b.classList.toggle('active',b.textContent===file));
+  const contentEl=document.getElementById('doc-content');
+  if(!contentEl||!activePrd)return;
+  try{
+    const url='/api/prd/'+encodeURIComponent(activePrd)+'/artifact?phase='+encodeURIComponent(phase)+'&file='+encodeURIComponent(file);
+    const data=await(await fetch(url)).json();
+    const pre=document.createElement('pre');
+    pre.className='doc-pre';
+    pre.textContent=data.content||'(empty)';
+    contentEl.textContent='';
+    contentEl.appendChild(pre);
+    // Start auto-reload polling
+    startDocPoll(phase,file);
+  }catch(e){
+    const pre=document.createElement('pre');
+    pre.className='doc-pre';
+    pre.textContent='Error loading file: '+e.message;
+    contentEl.textContent='';
+    contentEl.appendChild(pre);
+  }
+}
+
+function startDocPoll(phase,file){
+  stopDocPoll();
+  docPollTimer=setInterval(async()=>{
+    if(!docSelectedFile||docSelectedFile.phase!==phase||docSelectedFile.file!==file)return stopDocPoll();
+    try{
+      const url='/api/prd/'+encodeURIComponent(activePrd)+'/artifact?phase='+encodeURIComponent(phase)+'&file='+encodeURIComponent(file);
+      const data=await(await fetch(url)).json();
+      const contentEl=document.getElementById('doc-content');
+      if(!contentEl)return;
+      const pre=contentEl.querySelector('.doc-pre');
+      if(pre&&pre.textContent!==data.content)pre.textContent=data.content||'(empty)';
+    }catch{}
+  },5000);
+}
+
+function stopDocPoll(){
+  if(docPollTimer){clearInterval(docPollTimer);docPollTimer=null}
 }
 
 /* Keyboard shortcuts */

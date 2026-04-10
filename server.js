@@ -1089,6 +1089,93 @@ app.post("/api/prd/refresh", (_r, res) => {
   res.json({ ok: true, ...summary });
 });
 
+// ── PRD Artifact Viewer API ─────────────────────
+
+app.get("/api/prd/:id/content", (req, res) => {
+  const prdId = req.params.id;
+  if (!VALID_PRD_ID.test(prdId)) return res.status(400).json({ error: "Invalid PRD ID format" });
+  if (!discoverPrds().includes(prdId)) return res.status(404).json({ error: "PRD not found" });
+
+  const prdDir = path.join(PRD_ROOT, prdId);
+  // Look for the main PRD document
+  const candidates = ["prd.md", "stories.md", "README.md"];
+  for (const name of candidates) {
+    const filePath = path.join(prdDir, name);
+    if (fs.existsSync(filePath)) {
+      try {
+        const content = fs.readFileSync(filePath, "utf-8");
+        return res.json({ file: name, content });
+      } catch (e) {
+        return res.status(500).json({ error: "Failed to read file: " + e.message });
+      }
+    }
+  }
+  res.status(404).json({ error: "No PRD document found (looked for: " + candidates.join(", ") + ")" });
+});
+
+app.get("/api/prd/:id/phases", (req, res) => {
+  const prdId = req.params.id;
+  if (!VALID_PRD_ID.test(prdId)) return res.status(400).json({ error: "Invalid PRD ID format" });
+  if (!discoverPrds().includes(prdId)) return res.status(404).json({ error: "PRD not found" });
+
+  const prdDir = path.join(PRD_ROOT, prdId);
+  const steps = workflow.steps || [];
+  const { statuses } = detectPhaseStatus(prdId);
+
+  const phases = steps.map(step => {
+    const dirName = step.dir || step.id;
+    const phaseDir = path.join(prdDir, dirName);
+    let files = [];
+    if (fs.existsSync(phaseDir) && fs.statSync(phaseDir).isDirectory()) {
+      files = fs.readdirSync(phaseDir)
+        .filter(f => f.endsWith(".md") && !f.startsWith("."))
+        .sort();
+    }
+    return {
+      name: dirName,
+      label: step.label || dirName,
+      files,
+      current: statuses[step.id] === "active",
+      status: statuses[step.id] || "pending",
+    };
+  });
+
+  res.json({ phases });
+});
+
+app.get("/api/prd/:id/artifact", (req, res) => {
+  const prdId = req.params.id;
+  const { phase, file } = req.query;
+  if (!VALID_PRD_ID.test(prdId)) return res.status(400).json({ error: "Invalid PRD ID format" });
+  if (!phase || !file) return res.status(400).json({ error: "Missing phase or file parameter" });
+
+  // Path traversal prevention: reject .. and absolute paths
+  if (phase.includes("..") || file.includes("..") || path.isAbsolute(phase) || path.isAbsolute(file)) {
+    return res.status(400).json({ error: "Invalid path" });
+  }
+
+  if (!discoverPrds().includes(prdId)) return res.status(404).json({ error: "PRD not found" });
+
+  const prdDir = path.join(PRD_ROOT, prdId);
+  const resolved = path.resolve(prdDir, phase, file);
+
+  // Verify the resolved path stays within PRD directory
+  if (!resolved.startsWith(prdDir + path.sep)) {
+    return res.status(400).json({ error: "Invalid path" });
+  }
+
+  if (!fs.existsSync(resolved)) {
+    return res.status(404).json({ error: "File not found" });
+  }
+
+  try {
+    const content = fs.readFileSync(resolved, "utf-8");
+    res.json({ phase, file, content });
+  } catch (e) {
+    res.status(500).json({ error: "Failed to read file: " + e.message });
+  }
+});
+
 // ── Claude Config API ───────────────────────────
 
 app.get("/api/claude-config", (_r, res) => {
