@@ -320,6 +320,25 @@ body{font-family:var(--m);background:var(--bg);color:var(--tx);height:100vh;disp
 .doc-content{background:var(--bg);border:1px solid var(--bd);border-radius:var(--radius);max-height:40vh;overflow-y:auto;padding:0}
 .doc-pre{font-family:var(--m);font-size:10px;line-height:1.7;color:var(--tx);padding:12px;margin:0;white-space:pre-wrap;word-break:break-word}
 
+/* ─── PRD Completeness Indicator ───────────────────── */
+.doc-completeness{margin-bottom:8px}
+.completeness-header{display:flex;align-items:center;gap:8px}
+.completeness-badge{font-family:var(--m);font-size:10px;padding:4px 10px;border-radius:var(--radius);border:1px solid var(--bd);display:inline-block}
+.completeness-badge.high{border-color:var(--gr);color:var(--gr);background:var(--grb)}
+.completeness-badge.mid{border-color:var(--or);color:var(--or);background:var(--orb)}
+.completeness-badge.low{border-color:var(--rd);color:var(--rd);background:var(--rdb)}
+.completeness-badge.unknown{color:var(--txd);font-style:italic}
+.completeness-toggle{font-family:var(--m);font-size:9px;padding:3px 8px;border-radius:var(--radius);border:1px solid var(--bd);background:none;color:var(--txd);cursor:pointer;transition:all .12s}
+.completeness-toggle:hover{border-color:var(--pp);color:var(--pp)}
+.completeness-detail{margin-top:6px;padding:8px;background:var(--s1);border:1px solid var(--bd);border-radius:var(--radius)}
+.completeness-items{display:flex;flex-direction:column;gap:4px}
+.completeness-item{display:flex;align-items:center;gap:8px;font-family:var(--m);font-size:9px;padding:3px 6px;border-radius:3px}
+.completeness-item.found{color:var(--gr)}
+.completeness-item.missing{color:var(--rd)}
+.completeness-item .ci-icon{width:12px;text-align:center;flex-shrink:0}
+.completeness-item .ci-text{flex:1}
+.completeness-item .ci-output{color:var(--txd);font-size:8px;flex-shrink:0}
+
 /* ─── Easter egg: Konami code activates retro mode ── */
 body.retro{
   background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,255,0,.03) 2px,rgba(0,255,0,.03) 4px);

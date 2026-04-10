@@ -221,7 +221,46 @@ async function cmdInit() {
     console.log("  workflow.yml already exists (skipped)");
   }
 
-  // 3. Create config.yml template
+  // 3. Create task-types.yml template
+  const taskTypesPath = path.join(pilotDir, "task-types.yml");
+  if (!fs.existsSync(taskTypesPath)) {
+    const defaultTaskTypes = path.join(__dirname, ".claude-pilot", "task-types.yml");
+    if (fs.existsSync(defaultTaskTypes)) {
+      fs.copyFileSync(defaultTaskTypes, taskTypesPath);
+    } else {
+      fs.writeFileSync(taskTypesPath, `# Task Type Definitions for PRD Completeness Assessment
+# Customize keywords and checklists for your project's task types.
+
+task_types:
+  - id: feature
+    label: "新機能開発"
+    keywords: ["feature", "機能", "追加", "新規"]
+    checklist:
+      - item: "ユーザーストーリー"
+        output: "decisions.md"
+      - item: "受入条件"
+        output: "tech_checklist.md"
+      - item: "画面/API仕様"
+        output: "tech_checklist.md"
+      - item: "非機能要件"
+        output: "tech_checklist.md"
+
+  - id: bugfix
+    label: "バグ修正"
+    keywords: ["bug", "バグ", "fix", "修正", "不具合", "エラー"]
+    checklist:
+      - item: "再現手順"
+        output: "tech_checklist.md"
+      - item: "期待する動作"
+        output: "decisions.md"
+      - item: "影響範囲"
+        output: "tech_checklist.md"
+`);
+    }
+    console.log("  Created task-types.yml");
+  }
+
+  // 4. Create config.yml template
   const configPath = path.join(pilotDir, "config.yml");
   if (!fs.existsSync(configPath)) {
     fs.writeFileSync(configPath, `# Claude Pilot Configuration

@@ -16,6 +16,7 @@ import { CmuxBridge } from "./cmux-bridge.js";
 import { evaluateGates, evaluateSubsteps, readFileSafe } from "./gate-engine.js";
 import { checkPhaseGateGuard } from "./phase-guard.js";
 import { scanProjectSkills, scanInstalledPlugins, scaffoldWorkflow } from "./scanner.js";
+import { classifyTaskType, assessCompleteness } from "./task-type-checker.js";
 import { execFile } from "child_process";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -1112,6 +1113,57 @@ app.get("/api/prd/:id/content", (req, res) => {
     }
   }
   res.status(404).json({ error: "No PRD document found (looked for: " + candidates.join(", ") + ")" });
+});
+
+// ── PRD Completeness Assessment API ───────────────
+
+function loadTaskTypes() {
+  // Try project-level config first, then fall back to Claude Pilot defaults
+  const projectConfig = path.join(PROJECT_DIR, ".claude-pilot", "task-types.yml");
+  const defaultConfig = path.join(__dirname, ".claude-pilot", "task-types.yml");
+  for (const configPath of [projectConfig, defaultConfig]) {
+    try {
+      const content = fs.readFileSync(configPath, "utf-8");
+      const parsed = yaml.load(content);
+      return parsed?.task_types || [];
+    } catch { /* try next */ }
+  }
+  return [];
+}
+
+app.get("/api/prd/:id/completeness", (req, res) => {
+  const prdId = req.params.id;
+  if (!VALID_PRD_ID.test(prdId)) return res.status(400).json({ error: "Invalid PRD ID format" });
+  if (!discoverPrds().includes(prdId)) return res.status(404).json({ error: "PRD not found" });
+
+  const prdDir = path.join(PRD_ROOT, prdId);
+  // Read PRD content from candidate files
+  const candidates = ["prd.md", "stories.md", "README.md"];
+  let prdContent = null;
+  for (const name of candidates) {
+    const filePath = path.join(prdDir, name);
+    if (fs.existsSync(filePath)) {
+      try { prdContent = fs.readFileSync(filePath, "utf-8"); break; } catch { /* skip */ }
+    }
+  }
+
+  if (!prdContent) {
+    return res.json({
+      prdId,
+      taskType: { id: "unknown", label: "Unknown" },
+      completeness: { total: 0, satisfied: 0, percentage: 0, items: [] },
+    });
+  }
+
+  const taskTypes = loadTaskTypes();
+  const classified = classifyTaskType(prdContent, taskTypes);
+  const completeness = assessCompleteness(prdContent, classified.checklist);
+
+  res.json({
+    prdId,
+    taskType: { id: classified.id, label: classified.label },
+    completeness,
+  });
 });
 
 app.get("/api/prd/:id/phases", (req, res) => {
