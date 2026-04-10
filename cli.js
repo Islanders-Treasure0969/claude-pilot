@@ -252,6 +252,7 @@ directories:
   Optional: Add hooks to .claude/settings.local.json:
     {
       "hooks": {
+        "PreToolUse": [{"hooks": [{"type": "http", "url": "http://localhost:${autoPort}/hooks/PreToolUse"}]}],
         "PostToolUse": [{"hooks": [{"type": "http", "url": "http://localhost:${autoPort}/hooks/PostToolUse", "async": true}]}],
         "Stop": [{"hooks": [{"type": "http", "url": "http://localhost:${autoPort}/hooks/Stop", "async": true}]}]
       }
