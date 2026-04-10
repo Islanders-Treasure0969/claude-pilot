@@ -1023,6 +1023,7 @@ function renderConfig(){
 
   // Tab: Documents (PRD artifact viewer)
   html+=`<div class="cfg-tab-content" id="cfg-documents">`;
+  html+=`<div class="doc-completeness" id="doc-completeness"></div>`;
   html+=`<div class="doc-viewer" id="doc-viewer">`;
   html+=`<div class="doc-phases" id="doc-phases"></div>`;
   html+=`<div class="doc-files" id="doc-files"></div>`;
@@ -1347,6 +1348,8 @@ async function loadDocPhases(){
   const container=document.getElementById('doc-phases');
   if(!container)return;
   if(!activePrd){container.textContent='Select a PRD first';return}
+  // Load completeness indicator in parallel
+  loadDocCompleteness();
   try{
     const data=await(await fetch('/api/prd/'+encodeURIComponent(activePrd)+'/phases')).json();
     const phases=data.phases||[];
@@ -1371,6 +1374,69 @@ async function loadDocPhases(){
       if(cur)selectDocPhase(cur.name);
     }
   }catch(e){container.textContent='Error loading phases'}
+}
+
+async function loadDocCompleteness(){
+  const el=document.getElementById('doc-completeness');
+  if(!el||!activePrd)return;
+  try{
+    const data=await(await fetch('/api/prd/'+encodeURIComponent(activePrd)+'/completeness')).json();
+    if(!data||data.taskType.id==='unknown'){
+      el.textContent='';
+      const badge=document.createElement('div');
+      badge.className='completeness-badge unknown';
+      badge.textContent='タスク種別: 不明 (task-types.yml にマッチするキーワードなし)';
+      el.appendChild(badge);
+      return;
+    }
+    const c=data.completeness;
+    const pctClass=c.percentage>=80?'high':c.percentage>=50?'mid':'low';
+    // Build header
+    el.textContent='';
+    const header=document.createElement('div');
+    header.className='completeness-header';
+    const badge=document.createElement('span');
+    badge.className='completeness-badge '+pctClass;
+    badge.textContent='タスク種別: '+data.taskType.label+' | 充足度: '+c.satisfied+'/'+c.total+' ('+c.percentage+'%)';
+    header.appendChild(badge);
+    const toggle=document.createElement('button');
+    toggle.className='completeness-toggle';
+    toggle.textContent='Details';
+    toggle.onclick=function(){toggleCompletenessDetail()};
+    header.appendChild(toggle);
+    el.appendChild(header);
+    // Build detail
+    const detail=document.createElement('div');
+    detail.className='completeness-detail';
+    detail.id='completeness-detail';
+    detail.style.display='none';
+    const itemsDiv=document.createElement('div');
+    itemsDiv.className='completeness-items';
+    (c.items||[]).forEach(function(it){
+      const row=document.createElement('div');
+      row.className='completeness-item '+(it.found?'found':'missing');
+      const icon=document.createElement('span');
+      icon.className='ci-icon';
+      icon.textContent=it.found?'\u2713':'\u2717';
+      row.appendChild(icon);
+      const text=document.createElement('span');
+      text.className='ci-text';
+      text.textContent=it.item;
+      row.appendChild(text);
+      const output=document.createElement('span');
+      output.className='ci-output';
+      output.textContent=it.output;
+      row.appendChild(output);
+      itemsDiv.appendChild(row);
+    });
+    detail.appendChild(itemsDiv);
+    el.appendChild(detail);
+  }catch(e){el.textContent=''}
+}
+
+function toggleCompletenessDetail(){
+  const el=document.getElementById('completeness-detail');
+  if(el)el.style.display=el.style.display==='none'?'block':'none';
 }
 
 async function selectDocPhase(phaseName){

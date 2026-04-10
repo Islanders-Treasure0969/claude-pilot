@@ -1,0 +1,49 @@
+# Task Type Definitions for PRD Completeness Assessment
+# Each task type has keywords for auto-detection and a checklist for Phase 0 evaluation.
+
+task_types:
+  - id: pipeline
+    label: "データパイプライン構築"
+    keywords: ["pipeline", "パイプライン", "ETL", "データ連携", "S3", "Glue", "BigQuery"]
+    checklist:
+      - item: "データソースの指定"
+        output: "tech_checklist.md"
+      - item: "全件/差分の連携方式"
+        output: "decisions.md"
+      - item: "エラー時の挙動"
+        output: "decisions.md"
+
+  - id: bugfix
+    label: "バグ修正"
+    keywords: ["bug", "バグ", "fix", "修正", "不具合", "エラー"]
+    checklist:
+      - item: "再現手順"
+        output: "tech_checklist.md"
+      - item: "期待する動作"
+        output: "decisions.md"
+      - item: "影響範囲"
+        output: "tech_checklist.md"
+
+  - id: refactor
+    label: "リファクタリング"
+    keywords: ["refactor", "リファクタ", "技術負債", "debt"]
+    checklist:
+      - item: "対象モジュール/ファイル"
+        output: "tech_checklist.md"
+      - item: "変更の動機"
+        output: "decisions.md"
+      - item: "互換性への影響"
+        output: "decisions.md"
+
+  - id: feature
+    label: "新機能開発"
+    keywords: ["feature", "機能", "追加", "新規"]
+    checklist:
+      - item: "ユーザーストーリー"
+        output: "decisions.md"
+      - item: "受入条件"
+        output: "tech_checklist.md"
+      - item: "画面/API仕様"
+        output: "tech_checklist.md"
+      - item: "非機能要件"
+        output: "tech_checklist.md"

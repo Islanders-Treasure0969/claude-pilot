@@ -22,6 +22,7 @@
     "gate-engine.js",
     "phase-guard.js",
     "scanner.js",
+    "task-type-checker.js",
     "cmux-bridge.js",
     "cmux-worker.js",
     "public/",
